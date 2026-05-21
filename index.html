@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>家族旅行小幫手 - 智慧行程與加密通訊</title>
+  
+  <!-- PWA & Mobile Optimization Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="家族旅行小幫手">
+  <meta name="theme-color" content="#121218">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%237c8b96%22/><text y=%222.9em%22 x=%225px%22 font-size=%2240%22 fill=%22white%22 font-family=%22sans-serif%22 font-weight=%22bold%22>TRIP</text></svg>">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       APP HEADER
+       ========================================================================== */ -->
+  <header class="app-header">
+    <div class="header-title-container">
+      <span class="header-subtitle" id="trip-dates">2026.05.21 - 05.25</span>
+      <h1 class="header-title" id="header-trip-name">東京家族之旅</h1>
+    </div>
+    <div class="header-actions">
+      <!-- Import / Export Trip Data -->
+      <button class="icon-btn" id="btn-sync-data" title="同步旅行資料" onclick="openModal('modal-sync')" style="font-size: 11px; font-weight: 600;">I/O</button>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       MEMBER QUICK FILTER BAR
+       ========================================================================== */ -->
+  <div class="filter-bar" id="filter-members-bar">
+    <span class="filter-label">顯示日程：</span>
+    <button class="filter-pill active" onclick="setMemberFilter('all')">
+      <span>全體行程</span>
+    </button>
+    <!-- JS will populate individual member filter pills here -->
+  </div>
+
+  <!-- ==========================================================================
+       MAIN APP CONTENT
+       ========================================================================== */ -->
+  <main class="app-content">
+
+    <!-- 1. ITINERARY VIEW (行程時間軸) -->
+    <section class="tab-panel active" id="panel-itinerary">
+      <!-- Day Tabs Slider -->
+      <div class="day-selector-wrap" id="itinerary-days-tabs">
+        <!-- JS dynamically renders Day 1, Day 2, etc. -->
+      </div>
+      
+      <!-- Day Outline Card -->
+      <div class="card" id="day-outline-card">
+        <div class="card-header">
+          <div class="card-title">今日概要</div>
+          <div class="badge badge-indigo" id="day-num-badge">Day 1</div>
+        </div>
+        <p class="card-subtitle" id="day-outline-text">抵達東京，辦理入住並在市區周邊走走，為接下來的行程暖身。</p>
+        <div id="day-lodging-subcard" class="day-lodging-subcard"></div>
+      </div>
+
+      <!-- Timeline Container -->
+      <div class="timeline" id="timeline-container">
+        <!-- JS dynamically renders schedule timeline events here -->
+      </div>
+    </section>
+
+    <!-- 2. LODGING & ATTRACTIONS VIEW (住宿與景點) -->
+    <section class="tab-panel" id="panel-info">
+      <!-- Accommodation Schedule & Info -->
+      <div class="section-header">住宿排程與明細</div>
+      <div id="lodging-container">
+        <!-- JS dynamically renders hotel cards here -->
+      </div>
+
+      <!-- Attractions Guide Directory -->
+      <div class="section-header" style="margin-top: 24px;">熱門景點口袋清單</div>
+      <div id="attractions-container">
+        <!-- JS dynamically renders attraction guide cards here -->
+      </div>
+    </section>
+
+    <!-- 3. END-TO-END ENCRYPTED GROUP CHAT VIEW (端對端加密群組聊天) -->
+    <section class="tab-panel" id="panel-chat">
+      <div class="chat-wrapper">
+        <!-- E2EE Secure Notification -->
+        <div class="chat-security-bar">
+          <div class="security-dot"></div>
+          <span>端對端加密已啟用 (AES-GCM 256 位元保護)</span>
+        </div>
+        
+        <!-- Messages Scroll Box -->
+        <div class="chat-messages" id="chat-messages-container">
+          <!-- JS dynamically appends chat bubbles here -->
+        </div>
+
+        <!-- Quick Emojis & Input Row -->
+        <div class="chat-input-bar">
+          <div class="chat-input-inner">
+            <input type="text" class="chat-input" id="chat-message-input" placeholder="安全發送訊息給家人..." onkeypress="handleChatKeyPress(event)">
+            <button class="chat-send-btn" id="btn-chat-send" onclick="sendTextMessage()" style="width: auto; border-radius: 12px; padding: 0 16px; font-size: 12px;">傳送</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. EXPENSE LOGGING & BILL SPLIT VIEW (記帳與智慧分帳) -->
+    <section class="tab-panel" id="panel-expenses">
+      <!-- Animated SVG Category Chart Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">支出開銷分析</div>
+        </div>
+        <div class="expense-analytics">
+          <div class="expense-chart-wrap">
+            <svg id="expense-svg-chart" viewBox="0 0 36 36" style="width: 100%; height: 100%; transform: rotate(-90deg);">
+              <!-- Dynamic SVG segments go here -->
+            </svg>
+            <div class="expense-chart-text">
+              <div class="expense-chart-num" id="expense-chart-total">NT$0</div>
+              <div class="expense-chart-lbl">總額</div>
+            </div>
+          </div>
+          <div class="expense-legend" id="expense-legend-list">
+            <!-- Dynamic legends go here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Summary Box -->
+      <div class="expense-summary-box">
+        <div class="summary-tile">
+          <div class="summary-title">總記帳筆數</div>
+          <div class="summary-val" id="exp-total-count">0 筆</div>
+        </div>
+        <div class="summary-tile">
+          <div class="summary-title">已結帳/待清算</div>
+          <div class="summary-val" id="exp-pending-clearance" style="color: var(--accent-orange);">處理中</div>
+        </div>
+      </div>
+
+      <!-- Smart Debt Settlement Board -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">智慧分帳清算推薦</div>
+          <div class="badge badge-green">最簡轉帳路徑</div>
+        </div>
+        <div id="debt-settlement-list">
+          <!-- JS dynamic debt simplification results -->
+        </div>
+      </div>
+
+      <!-- Expense Ledger History -->
+      <div class="section-header">記帳開銷明細</div>
+      <div id="expense-history-list">
+        <!-- JS dynamic list of expense logs -->
+      </div>
+    </section>
+
+    <!-- 5. FAMILY HUB & MEMBER CONFIG (成員管理) -->
+    <section class="tab-panel" id="panel-family">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">旅行家族成員</div>
+        </div>
+        <p class="card-subtitle" style="margin-bottom: 16px;">在此管理參與本次旅行的家庭成員，設定他們的專屬頭像色彩以利識別日程與帳務。</p>
+        <div class="member-list" id="family-members-container">
+          <!-- JS dynamically renders member list here -->
+        </div>
+      </div>
+
+      <!-- Add New Member Box -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">新增家族成員</div>
+        </div>
+        <form id="form-add-member" onsubmit="handleAddMember(event)">
+          <div class="form-group">
+            <label class="form-label" for="member-name-input">成員稱呼/暱稱</label>
+            <input type="text" class="form-input" id="member-name-input" placeholder="例如：大伯、堂姐、Me" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">代表色彩</label>
+            <div style="display: flex; gap: 10px; margin-top: 6px;">
+              <label><input type="radio" name="member-color" value="#7c8b96" checked style="accent-color:#7c8b96"> <span style="color:#7c8b96">■ 石板灰</span></label>
+              <label><input type="radio" name="member-color" value="#b59b8a" style="accent-color:#b59b8a"> <span style="color:#b59b8a">■ 暖泥沙</span></label>
+              <label><input type="radio" name="member-color" value="#a89f9e" style="accent-color:#a89f9e"> <span style="color:#a89f9e">■ 灰燼粉</span></label>
+              <label><input type="radio" name="member-color" value="#8d9282" style="accent-color:#8d9282"> <span style="color:#8d9282">■ 鼠尾草綠</span></label>
+              <label><input type="radio" name="member-color" value="#a39281" style="accent-color:#a39281"> <span style="color:#a39281">■ 麥香金</span></label>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 8px; width: 100%;">加入家族旅行</button>
+        </form>
+      </div>
+      
+      <!-- Security Passphrase Box -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">加密聊天密鑰</div>
+        </div>
+        <p class="card-subtitle" style="margin-bottom: 12px;">修改此密鑰即可切換聊天頻道，確保只有知道密碼的家族成員才能接收到對話訊息。</p>
+        <div style="display: flex; gap: 8px;">
+          <input type="password" class="form-input" id="chat-passphrase-input" value="tokyo2026">
+          <button class="btn btn-secondary" onclick="updateChatPassphrase()" style="flex: 0; white-space: nowrap; padding: 12px 16px;">更新密鑰</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================================================
+       DYNAMIC FLOATING ACTION BUTTON (FAB)
+       ========================================================================== */ -->
+  <button class="fab" id="global-fab" onclick="handleFabClick()" title="新增日程">＋</button>
+
+  <!-- ==========================================================================
+       BOTTOM NAVIGATION BAR
+       ========================================================================== */ -->
+  <nav class="app-nav">
+    <a class="nav-item active" onclick="switchTab('itinerary')">
+      <span>行程日程</span>
+      <div class="nav-glow"></div>
+    </a>
+    <a class="nav-item" onclick="switchTab('info')">
+      <span>住宿景點</span>
+      <div class="nav-glow"></div>
+    </a>
+    <a class="nav-item" onclick="switchTab('chat')">
+      <span>加密對話</span>
+      <div class="nav-glow"></div>
+    </a>
+    <a class="nav-item" onclick="switchTab('expenses')">
+      <span>旅行記帳</span>
+      <div class="nav-glow"></div>
+    </a>
+    <a class="nav-item" onclick="switchTab('family')">
+      <span>成員設定</span>
+      <div class="nav-glow"></div>
+    </a>
+  </nav>
+
+  <!-- ==========================================================================
+       MODAL: SYNCHRONIZATION & TRIP IMPORT/EXPORT
+       ========================================================================== */ -->
+  <div class="modal-overlay" id="modal-sync" onclick="closeModalOnOverlay(event, 'modal-sync')">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 class="modal-title">同步與共用旅程資料</h2>
+        <span class="modal-close" onclick="closeModal('modal-sync')">&times;</span>
+      </div>
+      <p class="card-subtitle" style="margin-bottom: 16px; line-height: 1.45;">
+        本 App 採用無伺服器離線架構。您可以將旅程資料匯出成「旅行代碼」傳給家人；家人貼上代碼即可一鍵匯入。
+      </p>
+      
+      <div class="form-group">
+        <label class="form-label">我的旅行代碼 (JSON)</label>
+        <textarea class="form-textarea" id="sync-data-textarea" readonly onclick="this.select()" style="font-family: monospace; font-size: 11px; min-height: 120px;"></textarea>
+      </div>
+      
+      <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+        <button class="btn btn-primary" onclick="copyTripCode()">複製代碼</button>
+        <button class="btn btn-secondary" onclick="exportTripFile()">儲存檔案</button>
+      </div>
+
+      <hr style="border: 0; border-top: 1px solid var(--panel-border); margin-bottom: 20px;">
+
+      <div class="form-group">
+        <label class="form-label" for="import-data-textarea">匯入家人傳送的旅行代碼</label>
+        <textarea class="form-textarea" id="import-data-textarea" placeholder="在此貼上家人的旅行代碼 (JSON)..." style="font-family: monospace; font-size: 11px; min-height: 80px;"></textarea>
+      </div>
+
+      <button class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);" onclick="importTripCode()">一鍵匯入與覆蓋</button>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: ADD/EDIT ITINERARY EVENT
+       ========================================================================== */ -->
+  <div class="modal-overlay" id="modal-event" onclick="closeModalOnOverlay(event, 'modal-event')">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 class="modal-title" id="event-modal-title">新增行程日程</h2>
+        <span class="modal-close" onclick="closeModal('modal-event')">&times;</span>
+      </div>
+      
+      <form id="form-event" onsubmit="saveItineraryEvent(event)">
+        <input type="hidden" id="event-edit-id">
+        
+        <div class="form-group">
+          <label class="form-label" for="event-title">日程主題/活動名稱</label>
+          <input type="text" class="form-input" id="event-title" placeholder="例如：成田機場接駁、晴空塔登頂、晚餐吃拉麵" required>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="event-day">安排天數</label>
+            <select class="form-select" id="event-day">
+              <!-- Dynamically populated days -->
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="event-time">起迄時間</label>
+            <input type="time" class="form-input" id="event-time" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="event-category">活動類別</label>
+          <select class="form-select" id="event-category">
+            <option value="flight">航班/大眾交通</option>
+            <option value="hotel">住宿/登記入住</option>
+            <option value="sightseeing" selected>景點/自由行程</option>
+            <option value="dining">餐飲/聚餐</option>
+            <option value="shopping">購物/逛街</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">參與的家族成員</label>
+          <div class="checkbox-group" id="event-members-checkboxes">
+            <!-- Dynamically populated member checkboxes -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="event-notes">備忘註記 (選填)</label>
+          <textarea class="form-textarea" id="event-notes" placeholder="例如：預約號碼、集合地點或地鐵出口號碼..."></textarea>
+        </div>
+
+        <div class="btn-group">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-event')">取消</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-event">確認儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: ADD/EDIT EXPENSE LOG
+       ========================================================================== */ -->
+  <div class="modal-overlay" id="modal-expense" onclick="closeModalOnOverlay(event, 'modal-expense')">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 class="modal-title" id="expense-modal-title">新增旅行開銷</h2>
+        <span class="modal-close" onclick="closeModal('modal-expense')">&times;</span>
+      </div>
+      
+      <form id="form-expense" onsubmit="saveExpense(event)">
+        <input type="hidden" id="expense-edit-id">
+        
+        <div class="form-group">
+          <label class="form-label" for="expense-title">消費項目名稱</label>
+          <input type="text" class="form-input" id="expense-title" placeholder="例如：第一天晚餐拉麵、晴空塔門票、Suica儲值" required>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex: 1.2;">
+            <label class="form-label" for="expense-amount">消費金額 (NT$)</label>
+            <input type="number" class="form-input" id="expense-amount" placeholder="0" min="1" required>
+          </div>
+          <div class="form-group" style="flex: 0.8;">
+            <label class="form-label" for="expense-category">消費類別</label>
+            <select class="form-select" id="expense-category">
+              <option value="dining" selected>餐飲</option>
+              <option value="lodging">住宿</option>
+              <option value="transport">交通</option>
+              <option value="tickets">門票</option>
+              <option value="shopping">購物</option>
+              <option value="other">雜支</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="expense-payer">付款人 (誰先付錢)</label>
+          <select class="form-select" id="expense-payer">
+            <!-- Dynamically populated members list -->
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">分攤成員 (誰一起平分)</label>
+          <div class="checkbox-group" id="expense-split-checkboxes">
+            <!-- Dynamically populated member checkboxes -->
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-expense')">取消</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-expense">確認儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: ADD/EDIT LODGING / ATTRACTION INFO
+       ========================================================================== */ -->
+  <div class="modal-overlay" id="modal-lodging" onclick="closeModalOnOverlay(event, 'modal-lodging')">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 class="modal-title" id="lodging-modal-title">新增住宿排程</h2>
+        <span class="modal-close" onclick="closeModal('modal-lodging')">&times;</span>
+      </div>
+      
+      <form id="form-lodging" onsubmit="saveLodging(event)">
+        <input type="hidden" id="lodging-edit-id">
+        
+        <div class="form-group">
+          <label class="form-label" for="lodging-name">住宿旅館名稱</label>
+          <input type="text" class="form-input" id="lodging-name" placeholder="例如：新宿王子大飯店、上野御徒町大都會..." required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="lodging-address">地址 / 導航連結</label>
+          <input type="text" class="form-input" id="lodging-address" placeholder="例如：東京都新宿區歌舞伎町1-30-1" required>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="lodging-phone">聯絡電話</label>
+            <input type="text" class="form-input" id="lodging-phone" placeholder="如：+81 3-3205-1111">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="lodging-code">訂房確認代碼</label>
+            <input type="text" class="form-input" id="lodging-code" placeholder="如：BKG-87192">
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="lodging-checkin">入住日期 (天數)</label>
+            <select class="form-select" id="lodging-checkin">
+              <!-- Days options -->
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="lodging-checkout">退房日期 (天數)</label>
+            <select class="form-select" id="lodging-checkout">
+              <!-- Days options -->
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">入住入住者</label>
+          <div class="checkbox-group" id="lodging-members-checkboxes">
+            <!-- Dynamically populated member checkboxes -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="lodging-instructions">登登記與抵達指引</label>
+          <textarea class="form-textarea" id="lodging-instructions" placeholder="例如：JR新宿站東口步行5分鐘、下午3點開始Check-in、寄放行李方式..."></textarea>
+        </div>
+
+        <div class="btn-group">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-lodging')">取消</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-lodging">確認儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JS Logic Application -->
+  <script src="app.js"></script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[PWA] Service Worker registered with scope: ', reg.scope))
+          .catch(err => console.error('[PWA] Service Worker registration failed: ', err));
+      });
+    }
+  </script>
+</body>
+</html>
