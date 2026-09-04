@@ -113,6 +113,10 @@ let state = {
   ]
 };
 
+// === 新增專案管理變數 ===
+let projects = [];
+let currentProjectId = null;
+
 // 全域密鑰與 PWA 連線狀態
 let derivedCryptoKey = null;
 let nostrWebSocket = null;
@@ -126,50 +130,195 @@ let currentActiveUserId = "m4"; // 預設「我」代表此台手機的操作者
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("Family Travel App Core Loading...");
   
-  // 1. 載入 LocalStorage 資料
+  // 1. 載入與初始化旅行專案 (Projects)
+  initProjects();
+  
+  // 2. 載入 LocalStorage 資料 (特定專案)
   loadFromLocalStorage();
   
-  // 2. 初始化隨機 Nostr 私密金鑰（用於 E2EE P2P 即時對話簽章）
+  // 3. 初始化隨機 Nostr 私密金鑰
   initNostrKeys();
   
-  // 3. 計算並導出 AES 加密密鑰 (基於密碼與 Salt)
+  // 4. 計算並導出 AES 加密密鑰
   await deriveChatKey();
   
-  // 4. 連線至 Nostr 去中心化即時 Relay
+  // 5. 連線至 Nostr 去中心化即時 Relay
   connectToNostrRelay();
   
-  // 5. 渲染所有的 UI 視圖
+  // 6. 渲染所有的 UI 視圖
   renderAllViews();
   
-  // 6. 設定滾動到最下方 (聊天室)
+  // 7. 設定滾動到最下方 (聊天室)
   scrollChatToBottom();
 });
 
 /**
- * 載入本地儲存
+ * 載入與初始化旅行專案
+ */
+function initProjects() {
+  const savedProjects = localStorage.getItem("family_travel_projects");
+  const activeId = localStorage.getItem("family_travel_active_trip_id");
+  
+  if (savedProjects) {
+    projects = JSON.parse(savedProjects);
+    currentProjectId = activeId || (projects.length > 0 ? projects[0].id : null);
+  } else {
+    // 檢查是否有舊的單一狀態資料需要遷移
+    const legacyState = localStorage.getItem("family_travel_agent_state");
+    
+    currentProjectId = "trip_default";
+    projects = [{
+      id: currentProjectId,
+      name: "東京家族之旅",
+      start: "2026-05-21",
+      end: "2026-05-25"
+    }];
+    
+    if (legacyState) {
+      // 遷移舊資料到新專案 Key
+      localStorage.setItem(`family_travel_agent_state_${currentProjectId}`, legacyState);
+      localStorage.removeItem("family_travel_agent_state");
+    }
+    
+    saveProjectsToLocal();
+  }
+}
+
+function saveProjectsToLocal() {
+  localStorage.setItem("family_travel_projects", JSON.stringify(projects));
+  if (currentProjectId) {
+    localStorage.setItem("family_travel_active_trip_id", currentProjectId);
+  }
+}
+
+/**
+ * 載入本地儲存 (目前專案)
  */
 function loadFromLocalStorage() {
-  const savedState = localStorage.getItem("family_travel_agent_state");
+  if (!currentProjectId) return;
+  
+  // 每次載入前先重置為預設狀態骨架
+  state = {
+    tripName: projects.find(p => p.id === currentProjectId)?.name || "家族旅行",
+    tripDates: "未設定",
+    members: {
+      "m1": { name: "爸爸", color: "#7c8b96" },
+      "m2": { name: "媽媽", color: "#b59b8a" },
+      "m3": { name: "妹妹", color: "#a89f9e" },
+      "m4": { name: "我", color: "#8d9282" }
+    },
+    itinerary: [],
+    lodgings: [],
+    expenses: [],
+    chatPassphrase: "tokyo2026",
+    chatMessages: []
+  };
+
+  const savedState = localStorage.getItem(`family_travel_agent_state_${currentProjectId}`);
   if (savedState) {
     try {
       const parsed = JSON.parse(savedState);
-      // 合併狀態，確保新增欄位不會遺漏
       state = { ...state, ...parsed };
-      console.log("成功自 LocalStorage 還原旅行資料");
+      console.log(`成功還原專案 [${currentProjectId}] 資料`);
     } catch (e) {
-      console.error("解析本地儲存失敗，使用預設值:", e);
+      console.error("解析本地儲存失敗:", e);
     }
   } else {
-    // 第一次載入，寫入預設值
     saveToLocalStorage();
   }
 }
 
 /**
- * 儲存本地儲存
+ * 儲存本地儲存 (目前專案)
  */
 function saveToLocalStorage() {
-  localStorage.setItem("family_travel_agent_state", JSON.stringify(state));
+  if (!currentProjectId) return;
+  localStorage.setItem(`family_travel_agent_state_${currentProjectId}`, JSON.stringify(state));
+}
+
+// === 專案管理 UI 邏輯 ===
+function openProjectManager() {
+  renderProjectList();
+  openModal('modal-projects');
+}
+
+function renderProjectList() {
+  const container = document.getElementById("project-list-container");
+  container.innerHTML = "";
+  
+  projects.forEach(p => {
+    const isActive = p.id === currentProjectId;
+    
+    const div = document.createElement("div");
+    div.className = `project-item ${isActive ? "active" : ""}`;
+    
+    div.innerHTML = `
+      <div style="flex: 1; cursor: pointer;" onclick="switchProject('${p.id}')">
+        <div class="project-item-title">${p.name} ${isActive ? '<span style="font-size: 10px; color: var(--primary); margin-left: 4px;">[使用中]</span>' : ''}</div>
+        <div class="project-item-dates">${p.start} - ${p.end}</div>
+      </div>
+      <div style="display: flex; align-items: center;">
+        ${projects.length > 1 && !isActive ? `<span style="cursor:pointer; display: inline-flex; align-items: center; color:var(--accent-red); margin-left: 12px; padding: 8px;" onclick="deleteProject('${p.id}')" title="刪除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></span>` : ''}
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+async function switchProject(newProjectId) {
+  if (newProjectId === currentProjectId) {
+    closeModal('modal-projects');
+    return;
+  }
+  
+  // 儲存當前
+  saveToLocalStorage();
+  
+  // 中斷連線
+  if (nostrWebSocket && nostrWebSocket.readyState === WebSocket.OPEN) {
+    nostrWebSocket.close();
+  }
+  
+  currentProjectId = newProjectId;
+  saveProjectsToLocal();
+  
+  // 載入新狀態
+  loadFromLocalStorage();
+  
+  // 重新計算密鑰與連線
+  await deriveChatKey();
+  connectToNostrRelay();
+  
+  // 重新渲染畫面
+  renderAllViews();
+  scrollChatToBottom();
+  
+  closeModal('modal-projects');
+}
+
+function handleCreateProject(e) {
+  e.preventDefault();
+  const name = document.getElementById("new-project-name").value.trim();
+  const start = document.getElementById("new-project-start").value;
+  const end = document.getElementById("new-project-end").value;
+  
+  if (!name || !start || !end) return;
+  
+  const newId = "trip_" + Date.now();
+  projects.push({ id: newId, name, start, end });
+  
+  saveProjectsToLocal();
+  switchProject(newId);
+  e.target.reset();
+}
+
+function deleteProject(idToDelete) {
+  if (confirm("確定要刪除這個旅行專案嗎？這將刪除該專案的所有行程、記帳與對話紀錄。")) {
+    projects = projects.filter(p => p.id !== idToDelete);
+    saveProjectsToLocal();
+    localStorage.removeItem(`family_travel_agent_state_${idToDelete}`);
+    renderProjectList();
+  }
 }
 
 // ==========================================================================

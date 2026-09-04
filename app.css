@@ -1290,3 +1290,35 @@ body {
     margin-bottom: 40px;
   }
 }
+
+/* ==========================================================================
+   PROJECT MANAGER STYLES
+   ========================================================================== */
+.project-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.project-item.active {
+  background: rgba(124, 139, 150, 0.1);
+  border: 1px solid var(--primary);
+}
+
+.project-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.project-item-dates {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}

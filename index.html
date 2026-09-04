@@ -22,9 +22,12 @@
        APP HEADER
        ========================================================================== */ -->
   <header class="app-header">
-    <div class="header-title-container">
+    <div class="header-title-container" onclick="openProjectManager()" style="cursor: pointer;">
       <span class="header-subtitle" id="trip-dates">2026.05.21 - 05.25</span>
-      <h1 class="header-title" id="header-trip-name">東京家族之旅</h1>
+      <h1 class="header-title" style="display: flex; align-items: center; gap: 4px;">
+        <span id="header-trip-name">東京家族之旅</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.6;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </h1>
     </div>
     <div class="header-actions">
       <!-- Import / Export Trip Data -->
@@ -464,6 +467,47 @@
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-lodging')">取消</button>
           <button type="submit" class="btn btn-primary" id="btn-save-lodging">確認儲存</button>
         </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: PROJECT MANAGER (TRAVEL TRIPS)
+       ========================================================================== */ -->
+  <div class="modal-overlay" id="modal-projects" onclick="closeModalOnOverlay(event, 'modal-projects')">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 class="modal-title">旅行專案管理</h2>
+        <span class="modal-close" onclick="closeModal('modal-projects')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </span>
+      </div>
+      
+      <p class="card-subtitle" style="margin-bottom: 12px;">點擊專案可切換旅行計劃。每個專案的資料與加密對話完全獨立。</p>
+      
+      <div id="project-list-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+        <!-- JS dynamically renders project list -->
+      </div>
+      
+      <hr style="border: 0; border-top: 1px solid var(--panel-border); margin-bottom: 20px;">
+      
+      <h3 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">建立新專案</h3>
+      <form id="form-add-project" onsubmit="handleCreateProject(event)">
+        <div class="form-group">
+          <label class="form-label" for="new-project-name">旅行名稱</label>
+          <input type="text" class="form-input" id="new-project-name" placeholder="例如：年底北海道滑雪" required>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="new-project-start">開始日期</label>
+            <input type="date" class="form-input" id="new-project-start" required>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="new-project-end">結束日期</label>
+            <input type="date" class="form-input" id="new-project-end" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">建立全新旅行</button>
       </form>
     </div>
   </div>
