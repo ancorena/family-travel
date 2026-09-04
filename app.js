@@ -1822,10 +1822,12 @@ function renderFamilyTab() {
           <div class="member-role-lbl">代墊開銷總額：NT$ ${totalPaid.toLocaleString()}</div>
         </div>
       </div>
-      <div>
+      <div style="display: flex; align-items: center; gap: 4px;">
         ${!isMe ? `<button class="btn btn-secondary" onclick="setCurrentActiveUser('${mId}')" style="font-size:11px; padding:6px 10px; border-radius:10px; cursor:pointer;">設定為我</button>` : ""}
-        ${isMe ? `` : ""}
-        <span style="cursor:pointer; display: inline-flex; align-items: center; color:var(--accent-red); margin-left:12px; vertical-align: middle;" onclick="deleteFamilyMember('${mId}')" title="刪除">
+        <span style="cursor:pointer; display: inline-flex; align-items: center; color:var(--text-muted); padding: 8px;" onclick="renameMember('${mId}')" title="修改名稱">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+        </span>
+        <span style="cursor:pointer; display: inline-flex; align-items: center; color:var(--accent-red); padding: 8px;" onclick="deleteFamilyMember('${mId}')" title="刪除">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
         </span>
       </div>
@@ -1841,6 +1843,28 @@ function setCurrentActiveUser(mId) {
   
   // 向在線家人廣播身份宣告，讓對方裝置偵測衝突
   broadcastIdentityClaim(mId);
+}
+
+/**
+ * 修改家庭成員名稱
+ */
+function renameMember(mId) {
+  const member = state.members[mId];
+  if (!member) return;
+  
+  const newName = prompt(`請輸入「${member.name}」的新名稱：`, member.name);
+  
+  if (newName === null) return; // 使用者按了取消
+  
+  const trimmed = newName.trim();
+  if (!trimmed) {
+    alert("名稱不能為空白！");
+    return;
+  }
+  
+  member.name = trimmed;
+  saveToLocalStorage();
+  renderAllViews();
 }
 
 /**
