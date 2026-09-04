@@ -197,10 +197,12 @@ function saveProjectsToLocal() {
 function loadFromLocalStorage() {
   if (!currentProjectId) return;
   
+  const currentProject = projects.find(p => p.id === currentProjectId);
+  
   // 每次載入前先重置為預設狀態骨架
   state = {
-    tripName: projects.find(p => p.id === currentProjectId)?.name || "家族旅行",
-    tripDates: "未設定",
+    tripName: currentProject?.name || "家族旅行",
+    tripDates: currentProject ? `${currentProject.start.replace(/-/g, '.')} - ${currentProject.end.replace(/-/g, '.')}` : "未設定",
     members: {
       "m1": { name: "爸爸", color: "#7c8b96" },
       "m2": { name: "媽媽", color: "#b59b8a" },
