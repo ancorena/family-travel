@@ -1865,26 +1865,27 @@ function updateModalSelectDropdowns() {
   Object.keys(state.members).forEach(mId => {
     const member = state.members[mId];
     
+    const onClickHandler = `event.preventDefault(); const cb = this.querySelector('input'); cb.checked = !cb.checked; toggleCheckboxPillStyle(cb);`;
     // 行程參與 checkboxes
     eventCheckboxes.innerHTML += `
-      <label class="checkbox-pill-wrap">
-        <input type="checkbox" class="event-member-checkbox" value="${mId}" checked style="display:none;" onchange="toggleCheckboxPillStyle(this)">
+      <label class="checkbox-pill-wrap" style="cursor:pointer;" onclick="${onClickHandler}">
+        <input type="checkbox" class="event-member-checkbox" value="${mId}" checked style="display:none;">
         <span class="checkbox-pill selected" style="border-color:${member.color}">${member.name}</span>
       </label>
     `;
     
     // 住宿房客 checkboxes
     lodgingCheckboxes.innerHTML += `
-      <label class="checkbox-pill-wrap">
-        <input type="checkbox" class="lodging-member-checkbox" value="${mId}" checked style="display:none;" onchange="toggleCheckboxPillStyle(this)">
+      <label class="checkbox-pill-wrap" style="cursor:pointer;" onclick="${onClickHandler}">
+        <input type="checkbox" class="lodging-member-checkbox" value="${mId}" checked style="display:none;">
         <span class="checkbox-pill selected" style="border-color:${member.color}">${member.name}</span>
       </label>
     `;
     
     // 記帳分攤 checkboxes
     expenseCheckboxes.innerHTML += `
-      <label class="checkbox-pill-wrap">
-        <input type="checkbox" class="expense-split-checkbox" value="${mId}" checked style="display:none;" onchange="toggleCheckboxPillStyle(this)">
+      <label class="checkbox-pill-wrap" style="cursor:pointer;" onclick="${onClickHandler}">
+        <input type="checkbox" class="expense-split-checkbox" value="${mId}" checked style="display:none;">
         <span class="checkbox-pill selected" style="border-color:${member.color}">${member.name}</span>
       </label>
     `;
@@ -1992,6 +1993,7 @@ function importTripCode() {
       alert("旅行代碼匯入成功！已成功同步全體行程、住宿、成員名單與歷史帳務。");
     }
   } catch (e) {
-    alert("匯入失敗！旅行代碼 JSON 解析出錯，請確保貼上的代碼完整無缺。");
+    console.error("JSON Parse Error:", e, "Code:", code);
+    alert(`匯入失敗！代碼解析錯誤。\n可能原因：代碼不完整或包含無法辨識的字元。\n系統錯誤訊息：${e.message}`);
   }
 }
