@@ -1995,10 +1995,17 @@ function importTripCode() {
   }
   
   try {
-    // 解決 LINE 或 iOS 備忘錄會自動把半形雙引號 `"` 變成全形雙引號 `“` `”` 的問題
-    const sanitizedCode = code
+    // 1. 解決 LINE 或 iOS 備忘錄會自動把半形雙引號 `"` 變成全形雙引號 `“` `”` 的問題
+    let sanitizedCode = code
       .replace(/[\u201C\u201D]/g, '"')
       .replace(/[\u2018\u2019]/g, "'");
+      
+    // 2. 智慧提取 JSON 區塊 (如果使用者不小心複製到前後文)
+    const firstBrace = sanitizedCode.indexOf('{');
+    const lastBrace = sanitizedCode.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      sanitizedCode = sanitizedCode.substring(firstBrace, lastBrace + 1);
+    }
       
     const importedState = JSON.parse(sanitizedCode);
     
@@ -2008,36 +2015,36 @@ function importTripCode() {
       return;
     }
     
-    if (confirm(`確定要匯入「${importedState.tripName}」嗎？這會完全覆蓋目前的本地行程、帳務、加密聊天紀錄，此操作不可逆！`)) {
-      state = importedState;
-      saveToLocalStorage();
+    if (confirm(`確定要匯入「${importedState.tripName}」嗎？\n系統將為您建立一個全新的旅行專案來存放此資料，不會覆蓋您現在的旅行。`)) {
       
-      // 同步更新專案列表 (Projects) 中的名稱與日期
-      const currentProject = projects.find(p => p.id === currentProjectId);
-      if (currentProject) {
-        currentProject.name = importedState.tripName;
-        if (importedState.tripDates && importedState.tripDates.includes(' - ')) {
-           const [start, end] = importedState.tripDates.split(' - ');
-           currentProject.start = start.trim().replace(/\./g, '-');
-           currentProject.end = end.trim().replace(/\./g, '-');
-        }
-        saveProjectsToLocal();
-        // 重新繪製專案列表，確保選單內的名稱與日期是最新的
-        renderProjectList();
+      const newId = "proj_" + Date.now();
+      
+      let start = new Date().toISOString().split('T')[0];
+      let end = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      
+      if (importedState.tripDates && importedState.tripDates.includes(' - ')) {
+         const dates = importedState.tripDates.split(' - ');
+         start = dates[0].trim().replace(/\./g, '-');
+         end = dates[1].trim().replace(/\./g, '-');
       }
       
-      // 重新生成加密頻道
-      deriveChatKey().then(() => {
-        if (nostrWebSocket && nostrWebSocket.readyState === WebSocket.OPEN) {
-          nostrWebSocket.close();
-        }
-        connectToNostrRelay();
+      projects.push({
+        id: newId,
+        name: importedState.tripName,
+        start: start,
+        end: end
       });
+      saveProjectsToLocal();
       
-      renderAllViews();
-      closeModal("modal-sync");
+      // 將資料存入新專案的 localStorage
+      localStorage.setItem(`family_travel_agent_state_${newId}`, JSON.stringify(importedState));
+      
+      // 自動切換過去
+      switchProject(newId);
+      
       importTextarea.value = "";
-      alert("旅行代碼匯入成功！已成功同步全體行程、住宿、成員名單與歷史帳務。");
+      closeModal("modal-sync");
+      alert("旅行代碼匯入成功！已為您建立新專案並自動切換。");
     }
   } catch (e) {
     console.error("JSON Parse Error:", e, "Code:", code);
