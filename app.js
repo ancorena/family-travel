@@ -1174,16 +1174,31 @@ function connectToNostrRelay() {
           // 解析發送者與訊息包
           const msgObj = JSON.parse(decryptedText);
           
-          // 避免重覆加入
-          if (!state.chatMessages.some(m => m.id === msgObj.id)) {
-            state.chatMessages.push(msgObj);
-            
-            // 限制最多 100 筆對話，防溢出
-            if (state.chatMessages.length > 100) state.chatMessages.shift();
-            
-            saveToLocalStorage();
-            renderChatMessages();
-            scrollChatToBottom();
+          if (msgObj.type === "STATE_SYNC") {
+            // 處理即時行程廣播
+            if (msgObj.sender !== currentActiveUserId && msgObj.timestamp > (state.lastSyncTimestamp || 0)) {
+              const senderName = state.members[msgObj.sender]?.name || "家人";
+              if (confirm(`收到來自「${senderName}」的最新行程與記帳推播更新，是否立刻套用？`)) {
+                const preservedChat = state.chatMessages; // 聊天紀錄保留本地的，不覆蓋
+                state = { ...msgObj.payload, chatMessages: preservedChat };
+                state.lastSyncTimestamp = msgObj.timestamp;
+                saveToLocalStorage();
+                renderAllViews();
+                alert("已成功套用最新行程資料！");
+              }
+            }
+          } else {
+            // 處理一般聊天訊息，避免重覆加入
+            if (!state.chatMessages.some(m => m.id === msgObj.id)) {
+              state.chatMessages.push(msgObj);
+              
+              // 限制最多 100 筆對話，防溢出
+              if (state.chatMessages.length > 100) state.chatMessages.shift();
+              
+              saveToLocalStorage();
+              renderChatMessages();
+              scrollChatToBottom();
+            }
           }
         }
       } catch (err) {
@@ -2068,5 +2083,36 @@ function importTripCode() {
   } catch (e) {
     console.error("JSON Parse Error:", e, "Code:", code);
     alert(`匯入失敗！代碼解析錯誤。\n可能原因：代碼不完整或包含無法辨識的字元。\n系統錯誤訊息：${e.message}`);
+  }
+}
+
+/**
+ * 透過 Nostr 加密頻道向在線家人即時推播行程更新
+ */
+async function broadcastStateUpdate() {
+  if (!nostrWebSocket || nostrWebSocket.readyState !== WebSocket.OPEN) {
+    alert("目前未連線至中繼伺服器，無法推播。請檢查網路或稍後再試。");
+    return;
+  }
+  
+  if (confirm("確定要將目前的「所有行程、住宿與記帳資料」推播給正在使用本 App 的家人嗎？\n(對方將會收到更新提示)")) {
+    try {
+      const coreState = { ...state };
+      delete coreState.chatMessages; // 聊天紀錄不用重複廣播
+      
+      const msgObj = {
+        type: "STATE_SYNC",
+        sender: currentActiveUserId,
+        timestamp: Date.now(),
+        payload: coreState
+      };
+      
+      await publishEncryptedMessageToNostr(msgObj);
+      alert("✅ 行程更新已成功發送給在線家人！");
+      closeModal("modal-sync");
+    } catch (e) {
+      console.error(e);
+      alert("推播失敗：" + e.message);
+    }
   }
 }
