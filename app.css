@@ -43,19 +43,20 @@
   font-family: var(--font-family);
 }
 
+html {
+  background: var(--bg-dark);
+  height: -webkit-fill-available;
+}
+
 body {
   background: var(--bg-dark);
   background-image: var(--bg-gradient);
   background-attachment: fixed;
   color: var(--text-primary);
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh; /* Modern mobile viewport height */
   width: 100vw;
-  overflow-x: hidden;
-  position: fixed; /* Lock viewport for native app scrolling feel */
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
+  overflow: hidden; /* Prevent body scrolling, let app-content scroll */
   display: flex;
   flex-direction: column;
 }
