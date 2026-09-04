@@ -725,7 +725,7 @@ function saveItineraryEvent(e) {
   }
   
   const eventIndex = state.itinerary.findIndex(item => item.id === id);
-  const eventData = { id, day, allDay, startTime, endTime, category, title, members, notes };
+  const eventData = { id, day, allDay, startTime, endTime, category, title, members, notes, lastModified: Date.now() };
   
   if (eventIndex > -1) {
     // 編輯
@@ -783,6 +783,8 @@ function editItineraryEvent(id) {
 function deleteItineraryEvent(id) {
   if (confirm("確定要刪除這筆行程日程嗎？")) {
     state.itinerary = state.itinerary.filter(item => item.id !== id);
+    if (!state.deletedItems) state.deletedItems = {};
+    state.deletedItems[id] = Date.now();
     saveToLocalStorage();
     renderAllViews();
   }
@@ -969,7 +971,7 @@ function saveLodging(e) {
   }
   
   const hotelIndex = state.accommodations.findIndex(h => h.id === id);
-  const hotelData = { id, name, address, phone, code, checkin, checkout, members, instructions };
+  const hotelData = { id, name, address, phone, code, checkin, checkout, members, instructions, lastModified: Date.now() };
   
   if (hotelIndex > -1) {
     state.accommodations[hotelIndex] = hotelData;
@@ -1008,6 +1010,8 @@ function editLodging(id) {
 function deleteLodging(id) {
   if (confirm("確定要刪除這筆住宿排程嗎？")) {
     state.accommodations = state.accommodations.filter(h => h.id !== id);
+    if (!state.deletedItems) state.deletedItems = {};
+    state.deletedItems[id] = Date.now();
     saveToLocalStorage();
     renderAllViews();
   }
@@ -1175,16 +1179,12 @@ function connectToNostrRelay() {
           const msgObj = JSON.parse(decryptedText);
           
           if (msgObj.type === "STATE_SYNC") {
-            // 處理即時行程廣播
+            // 處理即時行程廣播（智慧合併）
             if (msgObj.sender !== currentActiveUserId && msgObj.timestamp > (state.lastSyncTimestamp || 0)) {
               const senderName = state.members[msgObj.sender]?.name || "家人";
-              if (confirm(`收到來自「${senderName}」的最新行程與記帳推播更新，是否立刻套用？`)) {
-                const preservedChat = state.chatMessages; // 聊天紀錄保留本地的，不覆蓋
-                state = { ...msgObj.payload, chatMessages: preservedChat };
-                state.lastSyncTimestamp = msgObj.timestamp;
-                saveToLocalStorage();
-                renderAllViews();
-                alert("已成功套用最新行程資料！");
+              if (confirm(`收到來自「${senderName}」的最新行程與記帳更新，是否立刻合併？\n(您自己新增的項目會保留，不會被覆蓋)`)) {
+                mergeIncomingState(msgObj.payload, msgObj.timestamp);
+                alert("已成功合併最新行程資料！您與對方各自新增的項目都已保留。");
               }
             }
           } else {
@@ -1732,7 +1732,7 @@ function saveExpense(e) {
   }
   
   const expIndex = state.expenses.findIndex(x => x.id === id);
-  const expData = { id, title, amount, category, payer, splitWith };
+  const expData = { id, title, amount, category, payer, splitWith, lastModified: Date.now() };
   
   if (expIndex > -1) {
     state.expenses[expIndex] = expData;
@@ -1768,6 +1768,8 @@ function editExpense(id) {
 function deleteExpense(id) {
   if (confirm("確定要刪除這筆記帳紀錄嗎？")) {
     state.expenses = state.expenses.filter(x => x.id !== id);
+    if (!state.deletedItems) state.deletedItems = {};
+    state.deletedItems[id] = Date.now();
     saveToLocalStorage();
     renderAllViews();
   }
@@ -2095,7 +2097,7 @@ async function broadcastStateUpdate() {
     return;
   }
   
-  if (confirm("確定要將目前的「所有行程、住宿與記帳資料」推播給正在使用本 App 的家人嗎？\n(對方將會收到更新提示)")) {
+  if (confirm("確定要將目前的「所有行程、住宿與記帳資料」推播給正在使用本 App 的家人嗎？\n(對方將會智慧合併，雙方各自新增的項目都會保留)")) {
     try {
       const coreState = { ...state };
       delete coreState.chatMessages; // 聊天紀錄不用重複廣播
@@ -2108,11 +2110,124 @@ async function broadcastStateUpdate() {
       };
       
       await publishEncryptedMessageToNostr(msgObj);
-      alert("✅ 行程更新已成功發送給在線家人！");
+      alert("行程更新已成功發送給在線家人！對方收到後會自動與他們的資料智慧合併。");
       closeModal("modal-sync");
     } catch (e) {
       console.error(e);
       alert("推播失敗：" + e.message);
     }
   }
+}
+
+
+// ==========================================================================
+// 12. 智慧合併引擎 (SMART MERGE ENGINE / CRDT-like)
+// ==========================================================================
+
+/**
+ * 合併陣列：以 id 為鍵，保留雙方各自新增的項目，
+ * 相同 id 則取 lastModified 較新者。
+ * 已被任一方刪除的項目（存在於 combinedDeleted）則移除。
+ */
+function mergeArrayById(localArr, remoteArr, combinedDeleted) {
+  const map = new Map();
+  
+  // 先放入本地的全部項目
+  (localArr || []).forEach(item => {
+    map.set(item.id, item);
+  });
+  
+  // 再放入遠端的項目
+  (remoteArr || []).forEach(item => {
+    const existing = map.get(item.id);
+    if (!existing) {
+      // 本地沒有 → 這是對方新增的，加入
+      map.set(item.id, item);
+    } else {
+      // 雙方都有 → 比較 lastModified，取較新的
+      const localTime = existing.lastModified || 0;
+      const remoteTime = item.lastModified || 0;
+      if (remoteTime > localTime) {
+        map.set(item.id, item);
+      }
+    }
+  });
+  
+  // 移除被刪除的項目
+  for (const deletedId of Object.keys(combinedDeleted)) {
+    const deletedAt = combinedDeleted[deletedId];
+    const item = map.get(deletedId);
+    if (item) {
+      // 如果刪除時間比該項目的修改時間晚，代表使用者有意刪除
+      const itemTime = item.lastModified || 0;
+      if (deletedAt >= itemTime) {
+        map.delete(deletedId);
+      }
+    }
+  }
+  
+  return Array.from(map.values());
+}
+
+/**
+ * 合併成員物件：以 key 為鍵，保留雙方的成員
+ */
+function mergeMembers(localMembers, remoteMembers) {
+  const merged = { ...localMembers };
+  Object.keys(remoteMembers || {}).forEach(key => {
+    if (!merged[key]) {
+      merged[key] = remoteMembers[key]; // 對方新增的成員
+    }
+  });
+  return merged;
+}
+
+/**
+ * 合併刪除記錄：雙方的墓碑取較新的時間戳
+ */
+function mergeDeletedItems(localDeleted, remoteDeleted) {
+  const merged = { ...(localDeleted || {}) };
+  Object.keys(remoteDeleted || {}).forEach(key => {
+    if (!merged[key] || remoteDeleted[key] > merged[key]) {
+      merged[key] = remoteDeleted[key];
+    }
+  });
+  return merged;
+}
+
+/**
+ * 主合併函式：接收遠端 state，與本地 state 進行智慧合併
+ */
+function mergeIncomingState(remoteState, syncTimestamp) {
+  // 1. 合併刪除記錄（雙方的墓碑都要保留）
+  const combinedDeleted = mergeDeletedItems(state.deletedItems, remoteState.deletedItems);
+  
+  // 2. 合併各個資料陣列
+  state.itinerary = mergeArrayById(state.itinerary, remoteState.itinerary, combinedDeleted);
+  state.accommodations = mergeArrayById(state.accommodations, remoteState.accommodations, combinedDeleted);
+  state.expenses = mergeArrayById(state.expenses, remoteState.expenses, combinedDeleted);
+  state.attractions = mergeArrayById(state.attractions, remoteState.attractions, combinedDeleted);
+  
+  // 3. 合併成員（只增不刪，避免誤刪家人）
+  state.members = mergeMembers(state.members, remoteState.members);
+  
+  // 4. 天數結構以「較多天數的一方」為準
+  if ((remoteState.days || []).length > (state.days || []).length) {
+    state.days = remoteState.days;
+  }
+  
+  // 5. 旅行基本資料以遠端為準（因為對方可能有修改名稱或日期）
+  if (remoteState.tripName) state.tripName = remoteState.tripName;
+  if (remoteState.tripDates) state.tripDates = remoteState.tripDates;
+  
+  // 6. 合併聊天密鑰（使用對方的，保持頻道一致）
+  if (remoteState.chatPassphrase) state.chatPassphrase = remoteState.chatPassphrase;
+  
+  // 7. 保存合併後的刪除記錄與時間戳
+  state.deletedItems = combinedDeleted;
+  state.lastSyncTimestamp = syncTimestamp;
+  
+  // 8. 保存並重新渲染
+  saveToLocalStorage();
+  renderAllViews();
 }
