@@ -1947,7 +1947,12 @@ function importTripCode() {
   }
   
   try {
-    const importedState = JSON.parse(code);
+    // 解決 LINE 或 iOS 備忘錄會自動把半形雙引號 `"` 變成全形雙引號 `“` `”` 的問題
+    const sanitizedCode = code
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'");
+      
+    const importedState = JSON.parse(sanitizedCode);
     
     // 基本結構檢核
     if (!importedState.tripName || !importedState.members || !importedState.itinerary) {
