@@ -375,9 +375,20 @@ async function deleteProject(idToDelete) {
 // 3. UI 渲染中心 (UI RENDERING SYSTEM)
 // ==========================================================================
 function renderAllViews() {
+  // 防呆檢查：確保所有必備陣列與物件存在，避免舊版或毀損的 LocalStorage 造成 Crash
+  state.days = state.days || [{ day: 1, date: "2026-01-01", title: "行程待定", desc: "自由活動" }];
+  state.members = state.members || {};
+  state.itinerary = state.itinerary || [];
+  state.accommodations = state.accommodations || [];
+  state.attractions = state.attractions || [];
+  state.expenses = state.expenses || [];
+  state.chatMessages = state.chatMessages || [];
+  state.activeDay = state.activeDay || 1;
+  state.currentTab = state.currentTab || "itinerary";
+  
   // 更新 Header
-  document.getElementById("header-trip-name").innerText = state.tripName;
-  document.getElementById("trip-dates").innerText = state.tripDates;
+  document.getElementById("header-trip-name").innerText = state.tripName || "無名稱";
+  document.getElementById("trip-dates").innerText = state.tripDates || "無日期";
   
   // 1. 渲染成員快速過濾列
   renderMemberFilterBar();
@@ -915,9 +926,12 @@ function openLodgingModal() {
   document.getElementById("form-lodging").reset();
   document.getElementById("lodging-edit-id").value = "";
   
-  // 預設全勾選房客
+  // 預設全勾選房客，並同步視覺 Pill
   const checkboxes = document.querySelectorAll(".lodging-member-checkbox");
-  checkboxes.forEach(cb => cb.checked = true);
+  checkboxes.forEach(cb => {
+    cb.checked = true;
+    toggleCheckboxPillStyle(cb);
+  });
   
   openModal("modal-lodging");
 }
@@ -985,6 +999,7 @@ function editLodging(id) {
   const checkboxes = document.querySelectorAll(".lodging-member-checkbox");
   checkboxes.forEach(cb => {
     cb.checked = hotel.members.includes(cb.value);
+    toggleCheckboxPillStyle(cb);
   });
   
   openModal("modal-lodging");
@@ -1497,27 +1512,27 @@ function calculateSmartSettlement() {
   const container = document.getElementById("debt-settlement-list");
   container.innerHTML = "";
   
-  // 1. 初始化所有人的淨差額為 0
+  // 1. 初始化所有成員餘額
   const balances = {};
-  Object.keys(state.members).forEach(id => {
-    balances[id] = 0;
-  });
+  Object.keys(state.members).forEach(id => balances[id] = 0);
   
   // 2. 統計每筆帳單中，付款人得到正額，分攤人得到負額
   state.expenses.forEach(exp => {
-    const amt = exp.amount;
     const payer = exp.payer;
+    const amt = exp.amount;
     const splitCount = exp.splitWith.length;
     
     if (splitCount === 0) return;
     
     const perPerson = amt / splitCount;
     
-    // 付款人先墊了整筆錢
+    // 付款人先墊了整筆錢 (防呆：若付款人已被刪除)
+    if (balances[payer] === undefined) balances[payer] = 0;
     balances[payer] += amt;
     
-    // 每個人扣除自己應攤的部分
+    // 每個人扣除自己應攤的部分 (防呆：若分攤人已被刪除)
     exp.splitWith.forEach(memberId => {
+      if (balances[memberId] === undefined) balances[memberId] = 0;
       balances[memberId] -= perPerson;
     });
   });
@@ -1667,9 +1682,12 @@ function openExpenseModal() {
   // 預設登入者為付款人
   document.getElementById("expense-payer").value = currentActiveUserId;
   
-  // 預設勾選全體分攤
+  // 預設勾選全體分攤，並同步視覺 Pill
   const checkboxes = document.querySelectorAll(".expense-split-checkbox");
-  checkboxes.forEach(cb => cb.checked = true);
+  checkboxes.forEach(cb => {
+    cb.checked = true;
+    toggleCheckboxPillStyle(cb);
+  });
   
   openModal("modal-expense");
 }
@@ -1726,6 +1744,7 @@ function editExpense(id) {
   const checkboxes = document.querySelectorAll(".expense-split-checkbox");
   checkboxes.forEach(cb => {
     cb.checked = exp.splitWith.includes(cb.value);
+    toggleCheckboxPillStyle(cb);
   });
   
   openModal("modal-expense");
