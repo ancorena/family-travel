@@ -278,7 +278,10 @@
         <textarea class="form-textarea" id="import-data-textarea" placeholder="在此貼上家人的旅行代碼 (JSON)..." style="font-family: monospace; font-size: 11px; min-height: 80px;"></textarea>
       </div>
 
-      <button class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);" onclick="importTripCode()">一鍵匯入與覆蓋</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" style="flex: 1;" onclick="document.getElementById('import-data-textarea').value=''">清除</button>
+        <button class="btn btn-primary" style="flex: 2; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);" onclick="importTripCode()">一鍵匯入與覆蓋</button>
+      </div>
     </div>
   </div>
 
