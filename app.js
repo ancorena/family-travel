@@ -210,7 +210,8 @@ function loadFromLocalStorage() {
       "m4": { name: "我", color: "#8d9282" }
     },
     itinerary: [],
-    lodgings: [],
+    accommodations: [],
+    attractions: [],
     expenses: [],
     chatPassphrase: "tokyo2026",
     chatMessages: []
