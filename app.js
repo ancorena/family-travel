@@ -1927,9 +1927,25 @@ function importTripCode() {
       state = importedState;
       saveToLocalStorage();
       
+      // 同步更新專案列表 (Projects) 中的名稱與日期
+      const currentProject = projects.find(p => p.id === currentProjectId);
+      if (currentProject) {
+        currentProject.name = importedState.tripName;
+        if (importedState.tripDates && importedState.tripDates.includes(' - ')) {
+           const [start, end] = importedState.tripDates.split(' - ');
+           currentProject.start = start.trim().replace(/\./g, '-');
+           currentProject.end = end.trim().replace(/\./g, '-');
+        }
+        saveProjectsToLocal();
+        // 重新繪製專案列表，確保選單內的名稱與日期是最新的
+        renderProjectList();
+      }
+      
       // 重新生成加密頻道
       deriveChatKey().then(() => {
-        if (nostrWebSocket) nostrWebSocket.close();
+        if (nostrWebSocket && nostrWebSocket.readyState === WebSocket.OPEN) {
+          nostrWebSocket.close();
+        }
         connectToNostrRelay();
       });
       
