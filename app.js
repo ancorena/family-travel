@@ -123,6 +123,11 @@ let nostrWebSocket = null;
 let myTempNostrPrivateKey = null;
 let myTempNostrPublicKey = null;
 let currentActiveUserId = "m4"; // 預設「我」代表此台手機的操作者
+let myDeviceId = localStorage.getItem("family_travel_device_id");
+if (!myDeviceId) {
+  myDeviceId = "dev_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8);
+  localStorage.setItem("family_travel_device_id", myDeviceId);
+}
 
 // ==========================================================================
 // 2. 初始化應用程式 (APP INITIALIZATION)
@@ -1187,6 +1192,12 @@ function connectToNostrRelay() {
                 alert("已成功合併最新行程資料！您與對方各自新增的項目都已保留。");
               }
             }
+          } else if (msgObj.type === "IDENTITY_CLAIM") {
+            // 處理身份衝突偵測
+            if (msgObj.deviceId !== myDeviceId && msgObj.claimedId === currentActiveUserId) {
+              const claimedName = state.members[msgObj.claimedId]?.name || "未知";
+              alert(`⚠️ 身份衝突警告！\n\n另一台裝置剛剛將自己設定為「${claimedName}」，和您目前的身份相同。\n\n這會導致聊天訊息與記帳分攤混亂。請其中一方立刻到「成員設定」頁面切換成自己的身份。`);
+            }
           } else {
             // 處理一般聊天訊息，避免重覆加入
             if (!state.chatMessages.some(m => m.id === msgObj.id)) {
@@ -1827,6 +1838,9 @@ function setCurrentActiveUser(mId) {
   currentActiveUserId = mId;
   renderAllViews();
   alert(`已切換目前操作裝置的使用者為【${state.members[mId]?.name}】！現在您在聊天室與投票時將以此身份發言。`);
+  
+  // 向在線家人廣播身份宣告，讓對方裝置偵測衝突
+  broadcastIdentityClaim(mId);
 }
 
 /**
@@ -2230,4 +2244,32 @@ function mergeIncomingState(remoteState, syncTimestamp) {
   // 8. 保存並重新渲染
   saveToLocalStorage();
   renderAllViews();
+}
+
+// ==========================================================================
+// 13. 身份衝突偵測 (IDENTITY CONFLICT DETECTION)
+// ==========================================================================
+
+/**
+ * 向在線家人廣播「我是誰」的宣告，用於偵測身份重複
+ */
+async function broadcastIdentityClaim(claimedMemberId) {
+  if (!nostrWebSocket || nostrWebSocket.readyState !== WebSocket.OPEN) {
+    return; // 靜默失敗，不打擾使用者
+  }
+  
+  try {
+    const msgObj = {
+      type: "IDENTITY_CLAIM",
+      deviceId: myDeviceId,
+      claimedId: claimedMemberId,
+      claimedName: state.members[claimedMemberId]?.name || "未知",
+      timestamp: Date.now()
+    };
+    
+    await publishEncryptedMessageToNostr(msgObj);
+    console.log("[Identity] 已廣播身份宣告:", claimedMemberId);
+  } catch (e) {
+    console.error("[Identity] 廣播身份宣告失敗:", e);
+  }
 }
