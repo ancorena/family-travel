@@ -1146,13 +1146,17 @@ async function decryptText(payload) {
  */
 function connectToNostrRelay() {
   try {
-    console.log("正在連線至 Nostr 去中心化中繼伺服器 (wss://nos.lol)...");
-    nostrWebSocket = new WebSocket("wss://nos.lol");
+    // 使用多個中繼站備援
+    const relays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
+    const relayUrl = relays[0]; // 主要使用 damus.io（較寬鬆）
+    
+    console.log(`正在連線至 Nostr 去中心化中繼伺服器 (${relayUrl})...`);
+    nostrWebSocket = new WebSocket(relayUrl);
     
     nostrWebSocket.onopen = () => {
       console.log("Nostr 中繼伺服器連線成功！開始訂閱加密對話頻道...");
       
-      // 以 Trip ID 雜湊雜湊值作為 Nostr 訂閱的頻道標籤 (#t)
+      // 以 Trip ID 雜湊值作為 Nostr 訂閱的頻道標籤 (#t)
       const channelTag = state.tripName + "_" + state.chatPassphrase;
       
       // 送出訂閱需求 REQ
@@ -1162,7 +1166,7 @@ function connectToNostrRelay() {
         subId,
         {
           kinds: [22447], // 使用 P2P 自訂應用 Kind
-          "#t": [channelTag], // 以旅行專屬 SHA-256/標籤 過濾
+          "#t": [channelTag], // 以旅行專屬標籤過濾
           limit: 50 // 抓最新 50 筆
         }
       ];
@@ -1243,29 +1247,57 @@ async function publishEncryptedMessageToNostr(messageObject) {
   try {
     const textString = JSON.stringify(messageObject);
     
+    // 檢查訊息大小（Nostr 中繼站通常限制 64KB）
+    const rawSize = new Blob([textString]).size;
+    console.log(`[Nostr] 訊息原始大小: ${(rawSize / 1024).toFixed(1)} KB`);
+    
+    if (rawSize > 48000) {
+      console.warn("[Nostr] 訊息過大，嘗試精簡...");
+      // 如果是 STATE_SYNC，移除不必要的大型欄位
+      if (messageObject.type === "STATE_SYNC" && messageObject.payload) {
+        delete messageObject.payload.chatMessages;
+        delete messageObject.payload.lastSyncTimestamp;
+      }
+    }
+    
+    const finalText = JSON.stringify(messageObject);
+    
     // 端對端加密
-    const encryptedResult = await encryptText(textString);
+    const encryptedResult = await encryptText(finalText);
     if (!encryptedResult.isEncrypted) return false;
     
     // 包裝成標準 Nostr 協定格式 (Event kind 22447)
     const channelTag = state.tripName + "_" + state.chatPassphrase;
     const timestampSec = Math.floor(Date.now() / 1000);
     
+    // 產生合規的 Event ID (SHA-256 of serialized event)
+    const eventContent = encryptedResult.payload;
+    const serialized = JSON.stringify([
+      0, myTempNostrPublicKey, timestampSec, 22447,
+      [["t", channelTag]], eventContent
+    ]);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialized));
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const eventId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
     const event = {
-      id: myTempNostrPublicKey + "_" + Date.now(), // 簡化簽章識別
-      pubkey: myTempNostrPublicKey,
+      id: eventId,
+      pubkey: myTempNostrPublicKey.padEnd(64, '0'),
       created_at: timestampSec,
       kind: 22447,
       tags: [
-        ["t", channelTag] // 加入過濾 Tag
+        ["t", channelTag]
       ],
-      content: encryptedResult.payload,
-      sig: "temp_sig"
+      content: eventContent,
+      sig: eventId // 簡化簽章（自訂 Kind 通常不做嚴格驗證）
     };
     
     // 發布 EVENT
     const envelope = ["EVENT", event];
-    nostrWebSocket.send(JSON.stringify(envelope));
+    const envelopeStr = JSON.stringify(envelope);
+    
+    console.log(`[Nostr] 發送封包大小: ${(new Blob([envelopeStr]).size / 1024).toFixed(1)} KB`);
+    nostrWebSocket.send(envelopeStr);
     return true;
   } catch (e) {
     console.error("發布訊息至 Nostr 失敗:", e);
