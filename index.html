@@ -306,15 +306,37 @@
         <div style="display: flex; gap: 10px;">
           <div class="form-group" style="flex: 1;">
             <label class="form-label" for="event-day">安排天數</label>
-            <select class="form-select" id="event-day">
-              <!-- Dynamically populated days -->
-            </select>
+            <select class="form-select" id="event-day"></select>
           </div>
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" for="event-time">起迄時間</label>
-            <input type="time" class="form-input" id="event-time" required>
+            <label class="form-label">
+              <input type="checkbox" id="event-all-day" onchange="toggleEventTimeInputs()"> 整天行程
+            </label>
+            <div style="display: flex; gap: 5px; margin-top: 4px;" id="event-time-inputs-container">
+              <input type="time" class="form-input" id="event-start-time" required>
+              <span style="display:flex; align-items:center;">-</span>
+              <input type="time" class="form-input" id="event-end-time" required>
+            </div>
           </div>
         </div>
+        
+        <script>
+          function toggleEventTimeInputs() {
+            const isAllDay = document.getElementById("event-all-day").checked;
+            const container = document.getElementById("event-time-inputs-container");
+            const startInput = document.getElementById("event-start-time");
+            const endInput = document.getElementById("event-end-time");
+            if (isAllDay) {
+              container.style.display = "none";
+              startInput.removeAttribute("required");
+              endInput.removeAttribute("required");
+            } else {
+              container.style.display = "flex";
+              startInput.setAttribute("required", "true");
+              endInput.setAttribute("required", "true");
+            }
+          }
+        </script>
 
         <div class="form-group">
           <label class="form-label" for="event-category">活動類別</label>

@@ -534,7 +534,17 @@ function renderItineraryTab() {
       return event.members.includes(state.filterMember);
     })
     // 依時間排序
-    .sort((a, b) => a.time.localeCompare(b.time));
+    .sort((a, b) => {
+      // 處理舊格式與新格式
+      const aAllDay = a.allDay || false;
+      const bAllDay = b.allDay || false;
+      if (aAllDay && !bAllDay) return -1; // 整天排前面
+      if (!aAllDay && bAllDay) return 1;
+      
+      const aTime = a.startTime || a.time || "";
+      const bTime = b.startTime || b.time || "";
+      return aTime.localeCompare(bTime);
+    });
     
   if (filteredEvents.length === 0) {
     timelineContainer.innerHTML = `
@@ -573,7 +583,7 @@ function renderItineraryTab() {
 
     timelineItem.innerHTML = `
       <div class="timeline-marker"></div>
-      <div class="timeline-item-time">${event.time} ${categoryBadgeHTML}</div>
+      <div class="timeline-item-time">${event.allDay ? "[整天]" : (event.startTime ? event.startTime + " - " + event.endTime : event.time)} ${categoryBadgeHTML}</div>
       <div class="card timeline-card">
         <div class="card-header" style="margin-bottom: 4px;">
           <div class="attraction-title" style="font-size: 14px;">${event.title}</div>
@@ -612,12 +622,19 @@ function openEventModal() {
   document.getElementById("form-event").reset();
   document.getElementById("event-edit-id").value = "";
   
+  // 預設時間欄位狀態
+  document.getElementById("event-all-day").checked = false;
+  if(typeof toggleEventTimeInputs === 'function') toggleEventTimeInputs();
+  
   // 設定預設天數選項為目前 activeDay
   document.getElementById("event-day").value = state.activeDay;
   
-  // 預設全選家庭成員
+  // 預設全選家庭成員，並同步視覺 Pill
   const checkboxes = document.querySelectorAll(".event-member-checkbox");
-  checkboxes.forEach(cb => cb.checked = true);
+  checkboxes.forEach(cb => {
+    cb.checked = true;
+    toggleCheckboxPillStyle(cb);
+  });
   
   openModal("modal-event");
 }
@@ -631,7 +648,9 @@ function saveItineraryEvent(e) {
   const id = document.getElementById("event-edit-id").value || "ev_" + Date.now();
   const title = document.getElementById("event-title").value;
   const day = parseInt(document.getElementById("event-day").value);
-  const time = document.getElementById("event-time").value;
+  const allDay = document.getElementById("event-all-day").checked;
+  const startTime = document.getElementById("event-start-time").value;
+  const endTime = document.getElementById("event-end-time").value;
   const category = document.getElementById("event-category").value;
   const notes = document.getElementById("event-notes").value;
   
@@ -648,7 +667,7 @@ function saveItineraryEvent(e) {
   }
   
   const eventIndex = state.itinerary.findIndex(item => item.id === id);
-  const eventData = { id, day, time, category, title, members, notes };
+  const eventData = { id, day, allDay, startTime, endTime, category, title, members, notes };
   
   if (eventIndex > -1) {
     // 編輯
@@ -674,14 +693,27 @@ function editItineraryEvent(id) {
   document.getElementById("event-edit-id").value = ev.id;
   document.getElementById("event-title").value = ev.title;
   document.getElementById("event-day").value = ev.day;
-  document.getElementById("event-time").value = ev.time;
+  
+  if (ev.allDay !== undefined) {
+    document.getElementById("event-all-day").checked = ev.allDay;
+    document.getElementById("event-start-time").value = ev.startTime || "";
+    document.getElementById("event-end-time").value = ev.endTime || "";
+  } else {
+    // 舊資料相容
+    document.getElementById("event-all-day").checked = false;
+    document.getElementById("event-start-time").value = ev.time || "";
+    document.getElementById("event-end-time").value = ev.time || "";
+  }
+  if(typeof toggleEventTimeInputs === 'function') toggleEventTimeInputs();
+  
   document.getElementById("event-category").value = ev.category;
   document.getElementById("event-notes").value = ev.notes || "";
   
-  // 勾選參與成員
+  // 勾選參與成員並同步視覺 Pill
   const checkboxes = document.querySelectorAll(".event-member-checkbox");
   checkboxes.forEach(cb => {
     cb.checked = ev.members.includes(cb.value);
+    toggleCheckboxPillStyle(cb);
   });
   
   openModal("modal-event");
