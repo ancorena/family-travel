@@ -333,11 +333,40 @@ function handleCreateProject(e) {
   e.target.reset();
 }
 
-function deleteProject(idToDelete) {
+async function deleteProject(idToDelete) {
   if (confirm("確定要刪除這個旅行專案嗎？這將刪除該專案的所有行程、記帳與對話紀錄。")) {
     projects = projects.filter(p => p.id !== idToDelete);
-    saveProjectsToLocal();
     localStorage.removeItem(`family_travel_agent_state_${idToDelete}`);
+    
+    if (idToDelete === currentProjectId) {
+      if (projects.length > 0) {
+        // 如果還有其他專案，切換到第一個
+        currentProjectId = projects[0].id;
+        saveProjectsToLocal();
+        loadFromLocalStorage();
+        await deriveChatKey();
+        connectToNostrRelay();
+        renderAllViews();
+      } else {
+        // 如果都刪光了，建立一個預設的
+        const newId = "proj_" + Date.now();
+        currentProjectId = newId;
+        projects.push({
+          id: newId,
+          name: "家族旅行",
+          start: new Date().toISOString().split('T')[0],
+          end: new Date(Date.now() + 86400000).toISOString().split('T')[0]
+        });
+        saveProjectsToLocal();
+        loadFromLocalStorage();
+        await deriveChatKey();
+        connectToNostrRelay();
+        renderAllViews();
+      }
+    } else {
+      saveProjectsToLocal();
+    }
+    
     renderProjectList();
   }
 }
