@@ -199,16 +199,34 @@ function loadFromLocalStorage() {
   
   const currentProject = projects.find(p => p.id === currentProjectId);
   
+  // 動態生成預設天數 (如果使用者是建立新專案)
+  const defaultDays = [];
+  if (currentProject) {
+    const startDate = new Date(currentProject.start);
+    const endDate = new Date(currentProject.end);
+    let dNum = 1;
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      if (dNum > 30) break; // 避免無限迴圈或過多天數
+      const dateStr = d.toISOString().split('T')[0];
+      defaultDays.push({ day: dNum++, date: dateStr, title: "行程待定", desc: "自由活動" });
+    }
+    if (defaultDays.length === 0) defaultDays.push({ day: 1, date: currentProject.start, title: "行程待定", desc: "自由活動" });
+  }
+
   // 每次載入前先重置為預設狀態骨架
   state = {
     tripName: currentProject?.name || "家族旅行",
     tripDates: currentProject ? `${currentProject.start.replace(/-/g, '.')} - ${currentProject.end.replace(/-/g, '.')}` : "未設定",
+    currentTab: "itinerary",
+    filterMember: "all",
+    activeDay: 1,
     members: {
       "m1": { name: "爸爸", color: "#7c8b96" },
       "m2": { name: "媽媽", color: "#b59b8a" },
       "m3": { name: "妹妹", color: "#a89f9e" },
       "m4": { name: "我", color: "#8d9282" }
     },
+    days: defaultDays.length > 0 ? defaultDays : [{ day: 1, date: "2026-05-21", title: "行程待定", desc: "自由活動" }],
     itinerary: [],
     accommodations: [],
     attractions: [],
