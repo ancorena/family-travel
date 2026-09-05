@@ -17,101 +17,25 @@
 // 1. 全域狀態宣告 (GLOBAL STATE)
 // ==========================================================================
 let state = {
-  tripName: "東京家族溫馨之旅",
-  tripDates: "2026.05.21 - 05.25",
+  tripName: "新旅程",
+  tripDates: "未設定",
   currentTab: "itinerary",
-  filterMember: "all", // "all", 或成員 ID "m1", "m2"...
+  filterMember: "all",
   activeDay: 1,
-  
-  // 家庭成員配置
   members: {
-    "m1": { name: "爸爸", color: "#7c8b96" },
-    "m2": { name: "媽媽", color: "#b59b8a" },
-    "m3": { name: "妹妹", color: "#a89f9e" },
-    "m4": { name: "我", color: "#8d9282" }
+    "m1": { name: "成員1", color: "#7c8b96" },
+    "m2": { name: "成員2", color: "#b59b8a" }
   },
-  
-  // 行程天數大綱
-  days: [
-    { day: 1, date: "2026-05-21", title: "抵達東京與新宿漫步", desc: "成田機場接駁，新宿王子大飯店辦理入住，晚上去新宿歌舞伎町品嚐道地拉麵。" },
-    { day: 2, date: "2026-05-22", title: "夢幻東京迪士尼樂園", desc: "全天暢玩迪士尼樂園，觀賞城堡煙火秀。全體家庭成員共同參與！" },
-    { day: 3, date: "2026-05-23", title: "潮流澀谷與明治神宮", desc: "早上參訪莊嚴的明治神宮，下午去澀谷十字路口、Shibuya Sky 展望台俯瞰東京夜景。" },
-    { day: 4, date: "2026-05-24", title: "淺草寺文化與晴空塔", desc: "體驗雷門淺草寺江戶風情，下午登上晴空塔眺望富士山，晚上享用美味的燒肉大餐。" },
-    { day: 5, date: "2026-05-25", title: "最後採買與溫馨返家", desc: "上午在東京車站一番街採購手信與藥妝，下午搭乘 Skyliner 前往成田機場搭機返國。" }
-  ],
-  
-  // 行程時間軸日程
-  itinerary: [
-    // Day 1
-    { id: "e1", day: 1, time: "12:30", category: "flight", title: "抵達東京成田機場 (JL802)", members: ["m1", "m2", "m3", "m4"], notes: "降落第二航廈，出關後前往 B1 購買 Skyliner 車票。" },
-    { id: "e2", day: 1, time: "14:00", category: "flight", title: "搭乘 Skyliner 特急列車", members: ["m1", "m2", "m3", "m4"], notes: "成田機場 前往 日暮里 轉乘山手線至新宿站。" },
-    { id: "e3", day: 1, time: "16:00", category: "hotel", title: "新宿王子大飯店 Check-in", members: ["m1", "m2", "m3", "m4"], notes: "新宿站東口步行5分鐘，確認訂房代碼：BKG-87192。" },
-    { id: "e4", day: 1, time: "18:30", category: "dining", title: "晚餐：一蘭拉麵 新宿歌舞伎町店", members: ["m1", "m2", "m3", "m4"], notes: "排隊約 30 分鐘，爸爸先付現金。" },
-    { id: "e5", day: 1, time: "20:30", category: "sightseeing", title: "新宿歌舞伎町 & 藥妝採買", members: ["m3", "m4"], notes: "爸媽先回飯店休息，我和妹妹去採買藥妝。" },
-    
-    // Day 2
-    { id: "e6", day: 2, time: "07:30", category: "transport", title: "搭乘地鐵前往迪士尼樂園", members: ["m1", "m2", "m3", "m4"], notes: "新宿站 前往 東京站（丸之內線） 前往 舞濱站（JR京葉線）。" },
-    { id: "e7", day: 2, time: "08:30", category: "sightseeing", title: "暢玩東京迪士尼樂園 (DisneyLand)", members: ["m1", "m2", "m3", "m4"], notes: "入園後先抽美女與野獸 DPA 快通！" },
-    { id: "e8", day: 2, time: "12:00", category: "dining", title: "午餐：迪士尼樂園紅心女王宴會大廳", members: ["m1", "m2", "m3", "m4"], notes: "主題餐廳，使用媽媽的信用卡付款。" },
-    { id: "e9", day: 2, time: "20:00", category: "sightseeing", title: "迪士尼城堡煙火秀與遊行", members: ["m1", "m2", "m3", "m4"], notes: "建議在城堡正前方廣場卡位。" },
-    
-    // Day 3
-    { id: "e10", day: 3, time: "09:30", category: "sightseeing", title: "明治神宮參拜與散步", members: ["m1", "m2", "m3"], notes: "原宿站出口，沿參道綠色隧道散步極為舒服。" },
-    { id: "e11", day: 3, time: "12:00", category: "dining", title: "午餐：原宿炸牛排 (Gyukatsu Motomura)", members: ["m1", "m2", "m3", "m4"], notes: "我（原PO）從澀谷過來會合，由我刷卡請客！" },
-    { id: "e12", day: 3, time: "15:00", category: "shopping", title: "澀谷宮下公園 & 潮流採購", members: ["m3", "m4"], notes: "爸媽去喝下午茶咖啡，我和妹妹逛宮下公園專賣店。" },
-    { id: "e13", day: 3, time: "19:00", category: "sightseeing", title: "Shibuya Sky 展望台看夜景", members: ["m1", "m2", "m3", "m4"], notes: "已預約 19:00 入場，遲到無法入場！現場風大注意保暖。" },
-    
-    // Day 4
-    { id: "e14", day: 4, time: "09:30", category: "sightseeing", title: "淺草寺雷門參拜", members: ["m1", "m2", "m4"], notes: "妹妹今天早上要賴床補眠，不參與。我們去參拜仲見世通吃人形燒。" },
-    { id: "e15", day: 4, time: "14:00", category: "sightseeing", title: "東京晴空塔 (Skytree) 觀景台", members: ["m1", "m2", "m3", "m4"], notes: "搭乘地鐵至押上站，已買好快速通票。" },
-    { id: "e16", day: 4, time: "18:00", category: "dining", title: "晚餐：敘敘苑 晴空塔 30F 景觀燒肉", members: ["m1", "m2", "m3", "m4"], notes: "慶祝家族旅行圓滿！爸爸刷卡買單。" }
-  ],
-  
-  // 住宿明細 (Lodgings)
-  accommodations: [
-    {
-      id: "h1",
-      name: "新宿王子大飯店 (Shinjuku Prince Hotel)",
-      address: "東京都新宿區歌舞伎町1-30-1",
-      phone: "+81 3-3205-1111",
-      email: "shinjuku-prince@princehotels.co.jp",
-      image: "hotel_preview.png",
-      code: "BKG-87192 (Agoda預訂)",
-      checkin: 1,
-      checkout: 5,
-      members: ["m1", "m2", "m3", "m4"],
-      instructions: "JR新宿站東口步行5分鐘，西武新宿站正上方。大廳在 B1。下午 3:00 開放 Check-in，可提前寄放行李。"
-    }
-  ],
-  
-  // 景點介紹 (Attractions)
-  attractions: [
-    { id: "a1", name: "Shibuya Sky 展望台", desc: "澀谷最新的地標！360度露天展望台，能完美俯瞰澀谷十字路口，黃昏與夜景極美。需提前1個月搶票。", emoji: "", cost: "NT$ 550", hours: "10:00 - 22:30", location: "澀谷站直結", wantToGo: ["m1", "m2", "m3", "m4"] },
-    { id: "a2", name: "東京迪士尼樂園", desc: "全球最溫馨的迪士尼！經典的灰姑娘城堡、全新美女與野獸城堡，適合全家大小一起沉浸在童話世界中。", emoji: "", cost: "NT$ 2100", hours: "09:00 - 21:00", location: "舞濱站步行5分鐘", wantToGo: ["m1", "m2", "m3", "m4"] },
-    { id: "a3", name: "淺草寺雷門", desc: "東京最古老的寺廟，巨大的紅色燈籠是必拍地標。仲見世通商店街有豐富的傳統點心與紀念品。", emoji: "", cost: "免費", hours: "06:00 - 17:00", location: "淺草站步行3分鐘", wantToGo: ["m1", "m2", "m4"] }
-  ],
-  
-  // 記帳資訊 (Expenses)
-  expenses: [
-    { id: "x1", title: "Skyliner 機場特急來回票", amount: 4800, category: "transport", payer: "m1", splitWith: ["m1", "m2", "m3", "m4"] }, // 爸爸幫全家出
-    { id: "x2", title: "第一天一蘭拉麵晚餐", amount: 1500, category: "dining", payer: "m1", splitWith: ["m1", "m2", "m3", "m4"] },
-    { id: "x3", title: "迪士尼樂園門票4張", amount: 8400, category: "tickets", payer: "m2", splitWith: ["m1", "m2", "m3", "m4"] }, // 媽媽刷卡買門票
-    { id: "x4", title: "迪士尼紅心女王午餐", amount: 2200, category: "dining", payer: "m2", splitWith: ["m1", "m2", "m3", "m4"] },
-    { id: "x5", title: "藥妝採購（大正感冒藥與面膜）", amount: 3200, category: "shopping", payer: "m3", splitWith: ["m2", "m3"] }, // 妹妹幫自己跟媽媽買
-    { id: "x6", title: "第二天原宿炸牛排午餐", amount: 2600, category: "dining", payer: "m4", splitWith: ["m1", "m2", "m3", "m4"] }, // 我請全家吃炸牛排
-    { id: "x7", title: "Shibuya Sky 門票4張", amount: 2200, category: "tickets", payer: "m4", splitWith: ["m1", "m2", "m3", "m4"] }, // 我代訂門票
-    { id: "x8", title: "飯店住宿費（新宿王子4晚）", amount: 24000, category: "lodging", payer: "m1", splitWith: ["m1", "m2", "m3", "m4"] } // 爸爸出大頭
-  ],
-  
-  // 加密群組聊天密鑰與訊息
-  chatPassphrase: "tokyo2026",
-  chatMessages: [
-    { id: "c1", senderId: "m1", senderName: "爸爸", content: "行李大家都拿齊了吧？我在 Skyliner 售票處等你們。或是大廳見！", timestamp: "05.21 13:05", system: false },
-    { id: "c2", senderId: "m3", senderName: "妹妹", content: "拿到了！我跟媽媽在後面，哥哥在幫忙推大行李箱～", timestamp: "05.21 13:07", system: false },
-    { id: "c3", senderId: "m4", senderName: "我", content: "沒問題，Skyliner 班次是 13:30，我們時間非常充裕！", timestamp: "05.21 13:08", system: false },
-    { id: "c4", senderId: "m2", senderName: "媽媽", content: "新宿大廳好漂亮！房間看出去還能看到西武鐵路！", timestamp: "05.21 16:15", system: false }
-  ]
+  days: [],
+  itinerary: [],
+  accommodations: [],
+  attractions: [],
+  expenses: [],
+  chatPassphrase: "",
+  chatMessages: []
 };
+    
+
 
 // === 新增專案管理變數 ===
 let projects = [];
@@ -174,9 +98,9 @@ function initProjects() {
     currentProjectId = "trip_default";
     projects = [{
       id: currentProjectId,
-      name: "東京家族之旅",
-      start: "2026-05-21",
-      end: "2026-05-25"
+      name: "新旅程",
+      start: new Date().toISOString().split('T')[0],
+      end: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0] // 預設 4 天
     }];
     
     if (legacyState) {
@@ -219,24 +143,23 @@ function loadFromLocalStorage() {
   }
 
   // 每次載入前先重置為預設狀態骨架
+  const randomPassphrase = "sec_" + Math.random().toString(36).substring(2, 10);
   state = {
-    tripName: currentProject?.name || "家族旅行",
+    tripName: currentProject?.name || "新旅程",
     tripDates: currentProject ? `${currentProject.start.replace(/-/g, '.')} - ${currentProject.end.replace(/-/g, '.')}` : "未設定",
     currentTab: "itinerary",
     filterMember: "all",
     activeDay: 1,
     members: {
-      "m1": { name: "爸爸", color: "#7c8b96" },
-      "m2": { name: "媽媽", color: "#b59b8a" },
-      "m3": { name: "妹妹", color: "#a89f9e" },
-      "m4": { name: "我", color: "#8d9282" }
+      "m1": { name: "成員1", color: "#7c8b96" },
+      "m2": { name: "成員2", color: "#b59b8a" }
     },
-    days: defaultDays.length > 0 ? defaultDays : [{ day: 1, date: "2026-05-21", title: "行程待定", desc: "自由活動" }],
+    days: defaultDays.length > 0 ? defaultDays : [{ day: 1, date: new Date().toISOString().split('T')[0], title: "行程待定", desc: "自由活動" }],
     itinerary: [],
     accommodations: [],
     attractions: [],
     expenses: [],
-    chatPassphrase: "tokyo2026",
+    chatPassphrase: randomPassphrase,
     chatMessages: []
   };
 
@@ -1436,9 +1359,7 @@ async function sendTextMessage() {
  */
 function simulateFamilyReply() {
   const replies = [
-    { sender: "m1", name: "爸爸", txt: "收到！我正在新宿御苑附近喝咖啡，等等 18:00 新宿大門集合喔！" },
-    { sender: "m2", name: "媽媽", txt: "哇，這這家拉麵看起來好好吃喔！記得幫我加點一個糖心蛋！" },
-    { sender: "m3", name: "妹妹", txt: "哥哥等我啦！我買個藥妝馬上好，再 5 分鐘！" }
+    { sender: "m1", name: "系統測試", txt: "網路似乎斷線了，這是一條離線測試訊息！" }
   ];
   
   const pick = replies[Math.floor(Math.random() * replies.length)];
