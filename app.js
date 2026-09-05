@@ -1220,7 +1220,8 @@ function connectToNostrRelay() {
           
           if (msgObj.type === "STATE_SYNC") {
             // 處理即時行程廣播（智慧合併）
-            if (msgObj.sender !== currentActiveUserId && msgObj.timestamp > (state.lastSyncTimestamp || 0)) {
+            // 只要不是自己發出的推播（比對 deviceId）且時間較新，就允許合併
+            if (msgObj.deviceId !== myDeviceId && msgObj.timestamp > (state.lastSyncTimestamp || 0)) {
               const senderName = state.members[msgObj.sender]?.name || "家人";
               if (confirm(`收到來自「${senderName}」的最新行程與記帳更新，是否立刻合併？\n(您自己新增的項目會保留，不會被覆蓋)`)) {
                 mergeIncomingState(msgObj.payload, msgObj.timestamp);
@@ -2222,6 +2223,7 @@ async function broadcastStateUpdate() {
       const msgObj = {
         type: "STATE_SYNC",
         sender: currentActiveUserId,
+        deviceId: myDeviceId,
         timestamp: Date.now(),
         payload: coreState
       };
