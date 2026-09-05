@@ -675,11 +675,17 @@ body {
 .chat-wrapper {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--header-height) - var(--tab-nav-height) - 76px);
+  height: calc(100dvh - 224px);
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 20px;
   overflow: hidden;
+}
+
+@media (min-width: 500px) {
+  .chat-wrapper {
+    height: calc(100vh - 264px);
+  }
 }
 
 .chat-security-bar {
