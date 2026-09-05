@@ -201,18 +201,23 @@ function openProjectManager() {
   renderProjectList();
   
   // 載入目前旅行的名稱與日期
-  document.getElementById("edit-trip-name").value = state.tripName || "";
+  const editNameEl = document.getElementById("edit-trip-name");
+  if (editNameEl) editNameEl.value = state.tripName || "";
   
   const dates = (state.tripDates || "").split(" - ");
-  if (dates.length === 2) {
-    document.getElementById("edit-trip-start").value = dates[0].replace(/\./g, '-');
-    document.getElementById("edit-trip-end").value = dates[1].replace(/\./g, '-');
-  } else {
-    // 嘗試從 projects array 取得
-    const proj = projects.find(p => p.id === currentProjectId);
-    if (proj) {
-      document.getElementById("edit-trip-start").value = proj.start;
-      document.getElementById("edit-trip-end").value = proj.end;
+  const editStartEl = document.getElementById("edit-trip-start");
+  const editEndEl = document.getElementById("edit-trip-end");
+  
+  if (editStartEl && editEndEl) {
+    if (dates.length === 2) {
+      editStartEl.value = dates[0].replace(/\./g, '-');
+      editEndEl.value = dates[1].replace(/\./g, '-');
+    } else {
+      const proj = projects.find(p => p.id === currentProjectId);
+      if (proj) {
+        editStartEl.value = proj.start;
+        editEndEl.value = proj.end;
+      }
     }
   }
   
@@ -651,6 +656,9 @@ function renderItineraryTab() {
     `;
     timelineContainer.appendChild(timelineItem);
   });
+  
+  // 渲染景點推薦卡
+  renderAttractions();
 }
 
 function setItineraryActiveDay(day) {
@@ -851,9 +859,11 @@ function renderInfoTab() {
       lodgingContainer.appendChild(card);
     });
   }
-  
-  // 2. 渲染景點推薦卡
+}
+
+function renderAttractions() {
   const attractionsContainer = document.getElementById("attractions-container");
+  if(!attractionsContainer) return;
   attractionsContainer.innerHTML = "";
   
   state.attractions.forEach(attr => {

@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="app-icon.jpg?v=2">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="app.css?v=38">
+  <link rel="stylesheet" href="app.css?v=39">
 <script type="module">
   import * as nostrTools from "https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm";
   window.nostrTools = nostrTools;
@@ -104,9 +104,15 @@
         <div id="day-lodging-subcard" class="day-lodging-subcard"></div>
       </div>
 
-      <!-- Timeline Container -->
-      <div class="timeline" id="timeline-container">
-        <!-- JS dynamically renders schedule timeline events here -->
+      <!-- Core Timeline Container -->
+      <div id="timeline-container" class="timeline-container" style="padding: 0 16px;">
+        <!-- JS dynamically renders timeline events here -->
+      </div>
+      
+      <!-- Attractions Guide Directory -->
+      <div class="section-header" style="margin-top: 32px;">熱門景點口袋清單</div>
+      <div id="attractions-container">
+        <!-- JS dynamically renders attraction guide cards here -->
       </div>
     </section>
 
@@ -118,11 +124,6 @@
         <!-- JS dynamically renders hotel cards here -->
       </div>
 
-      <!-- Attractions Guide Directory -->
-      <div class="section-header" style="margin-top: 24px;">熱門景點口袋清單</div>
-      <div id="attractions-container">
-        <!-- JS dynamically renders attraction guide cards here -->
-      </div>
     </section>
 
     <!-- 3. END-TO-END ENCRYPTED GROUP CHAT VIEW (端對端加密群組聊天) -->
@@ -597,7 +598,7 @@
   </div>
 
   <!-- JS Logic Application -->
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=39"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
