@@ -10,8 +10,19 @@
  * 6. 動態 SVG 圓餅圖繪製
  * 7. 端對端加密模組 (Web Crypto AES-GCM-256 & PBKDF2)
  * 8. 去中心化 Nostr WebSocket 即時通訊模組
- * 9. 資料一鍵匯出/匯入 JSON 引擎
- */
+ * 9. 資料一鍵匯出/匯入const APP_VERSION = "v38";
+
+function getContrastColor(hexcolor) {
+  if (!hexcolor) return "#ffffff";
+  hexcolor = hexcolor.replace("#", "");
+  if(hexcolor.length === 3) hexcolor = hexcolor[0]+hexcolor[0]+hexcolor[1]+hexcolor[1]+hexcolor[2]+hexcolor[2];
+  if(hexcolor.length !== 6) return "#ffffff";
+  var r = parseInt(hexcolor.substr(0,2),16);
+  var g = parseInt(hexcolor.substr(2,2),16);
+  var b = parseInt(hexcolor.substr(4,2),16);
+  var yiq = ((r*299)+(g*587)+(b*114))/1000;
+  return (yiq >= 140) ? '#121214' : '#ffffff';
+}
 
 // ==========================================================================
 // 1. 全域狀態宣告 (GLOBAL STATE)
@@ -590,13 +601,16 @@ function renderItineraryTab() {
     // 如果是今日第一個或是接近目前時間的，加 active 樣式
     timelineItem.className = `timeline-item ${index === 0 ? "active" : ""}`;
     
+
+
     // 建立參與成員頭像群組 HTML
     let membersAvatarsHTML = "";
     event.members.forEach(mId => {
       const m = state.members[mId];
       if (m) {
+        const textColor = getContrastColor(m.color);
         membersAvatarsHTML += `
-          <div class="avatar-circle" style="background: ${m.color}" title="${m.name}">
+          <div class="avatar-circle" style="background: ${m.color}; color: ${textColor};" title="${m.name}">
             ${m.name.substring(0, 1)}
           </div>
         `;
@@ -1857,7 +1871,7 @@ function renderFamilyTab() {
     
     card.innerHTML = `
       <div class="member-profile-info">
-        <div class="member-avatar-lg" style="background: ${member.color}">
+        <div class="member-avatar-lg" style="background: ${member.color}; color: ${getContrastColor(member.color)};">
           ${member.name.substring(0, 1)}
         </div>
         <div>

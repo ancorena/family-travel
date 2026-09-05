@@ -31,7 +31,7 @@
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   
-  --tab-nav-height: calc(72px + var(--safe-area-bottom));
+  --tab-nav-height: 80px;
   --header-height: calc(60px + var(--safe-area-top));
 }
 
@@ -1016,16 +1016,15 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 72px;
+  height: 80px;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   border-top: 1px solid var(--panel-border);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 10px;
   justify-content: space-around;
-  padding-bottom: var(--safe-area-bottom);
-  box-sizing: content-box;
   z-index: 100;
 }
 
