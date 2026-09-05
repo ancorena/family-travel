@@ -1221,6 +1221,15 @@ function connectSingleRelay(relayUrl, subscription) {
                 alert("已成功合併最新行程資料！您與對方各自新增的項目都已保留。");
               }
             }
+          } else if (msgObj.type === "MEMBER_SYNC") {
+            if (msgObj.deviceId !== myDeviceId) {
+              const combinedDeleted = mergeDeletedItems(state.deletedItems, msgObj.deletedItems);
+              state.deletedItems = combinedDeleted;
+              state.members = mergeMembers(state.members, msgObj.members, combinedDeleted);
+              saveToLocalStorage();
+              renderAllViews();
+              console.log("[Nostr] 已自動同步家庭成員名稱");
+            }
           } else if (msgObj.type === "IDENTITY_CLAIM") {
             if (msgObj.deviceId !== myDeviceId && msgObj.claimedId === currentActiveUserId) {
               const claimedName = state.members[msgObj.claimedId]?.name || "未知";
@@ -1938,6 +1947,7 @@ function renameMember(mId) {
   member.lastModified = Date.now();
   saveToLocalStorage();
   renderAllViews();
+  broadcastMemberSync();
 }
 
 /**
@@ -1969,6 +1979,7 @@ function handleAddMember(e) {
   nameInput.value = "";
   renderAllViews();
   alert(`成功邀請家人【${name}】加入本次旅行！`);
+  broadcastMemberSync();
 }
 
 /**
@@ -1988,8 +1999,12 @@ function deleteFamilyMember(id) {
       currentActiveUserId = Object.keys(state.members)[0];
     }
     
+    if (!state.deletedItems) state.deletedItems = {};
+    state.deletedItems[id] = Date.now();
+    
     saveToLocalStorage();
     renderAllViews();
+    broadcastMemberSync();
   }
 }
 
@@ -2285,20 +2300,42 @@ function mergeArrayById(localArr, remoteArr, combinedDeleted) {
 /**
  * 合併成員物件：以 key 為鍵，保留雙方的成員
  */
-function mergeMembers(localMembers, remoteMembers) {
-  const merged = { ...localMembers };
+function mergeMembers(localMembers, remoteMembers, combinedDeleted) {
+  const map = new Map();
+  
+  // 放入本地
+  Object.keys(localMembers || {}).forEach(key => {
+    map.set(key, localMembers[key]);
+  });
+  
+  // 合併遠端
   Object.keys(remoteMembers || {}).forEach(key => {
-    if (!merged[key]) {
-      merged[key] = remoteMembers[key]; // 對方新增的成員
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, remoteMembers[key]);
     } else {
-      // 雙方都有，比較修改時間
-      const localTime = merged[key].lastModified || 0;
+      const localTime = existing.lastModified || 0;
       const remoteTime = remoteMembers[key].lastModified || 0;
       if (remoteTime > localTime) {
-        merged[key] = remoteMembers[key];
+        map.set(key, remoteMembers[key]);
       }
     }
   });
+  
+  // 移除被刪除的成員
+  for (const deletedId of Object.keys(combinedDeleted || {})) {
+    const deletedAt = combinedDeleted[deletedId];
+    const member = map.get(deletedId);
+    if (member) {
+      const memberTime = member.lastModified || 0;
+      if (deletedAt >= memberTime) {
+        map.delete(deletedId);
+      }
+    }
+  }
+  
+  const merged = {};
+  map.forEach((value, key) => { merged[key] = value; });
   return merged;
 }
 
@@ -2328,8 +2365,8 @@ function mergeIncomingState(remoteState, syncTimestamp) {
   state.expenses = mergeArrayById(state.expenses, remoteState.expenses, combinedDeleted);
   state.attractions = mergeArrayById(state.attractions, remoteState.attractions, combinedDeleted);
   
-  // 3. 合併成員（只增不刪，避免誤刪家人）
-  state.members = mergeMembers(state.members, remoteState.members);
+  // 3. 合併成員
+  state.members = mergeMembers(state.members, remoteState.members, combinedDeleted);
   
   // 4. 天數結構以「較多天數的一方」為準
   if ((remoteState.days || []).length > (state.days || []).length) {
@@ -2378,5 +2415,27 @@ async function broadcastIdentityClaim(claimedMemberId) {
     console.log("[Identity] 已廣播身份宣告:", claimedMemberId);
   } catch (e) {
     console.error("[Identity] 廣播身份宣告失敗:", e);
+  }
+}
+
+/**
+ * 在背景自動廣播成員變更，讓其他裝置即時更新名單與名稱
+ */
+async function broadcastMemberSync() {
+  const openSockets = nostrWebSockets.filter(ws => ws.readyState === 1);
+  if (openSockets.length === 0) return;
+  
+  try {
+    const msgObj = {
+      type: "MEMBER_SYNC",
+      deviceId: myDeviceId,
+      members: state.members,
+      deletedItems: state.deletedItems || {},
+      timestamp: Date.now()
+    };
+    await publishEncryptedMessageToNostr(msgObj);
+    console.log("[Nostr] 已在背景推播成員變更");
+  } catch (e) {
+    console.error("[Nostr] 成員推播失敗:", e);
   }
 }
