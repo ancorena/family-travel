@@ -3,7 +3,7 @@
   "name": "家族旅行共同規劃小幫手",
   "icons": [
     {
-      "src": "app-icon.jpg",
+      "src": "app-icon.jpg?v=2",
       "sizes": "192x192 512x512",
       "type": "image/jpeg"
     }
