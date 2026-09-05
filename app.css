@@ -31,7 +31,7 @@
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   
-  --tab-nav-height: calc(65px + var(--safe-area-bottom));
+  --tab-nav-height: calc(70px + var(--safe-area-bottom));
   --header-height: calc(60px + var(--safe-area-top));
 }
 
@@ -100,7 +100,7 @@ body {
    ========================================================================== */
 .app-header {
   height: var(--header-height);
-  background: rgba(12, 12, 14, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--panel-border);
@@ -143,24 +143,25 @@ body {
   gap: 10px;
 }
 
+/* ==========================================================================
+   APP HEADER ICONS
+   ========================================================================== */
 .icon-btn {
-  background: rgba(255, 255, 255, 0.03);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--panel-highlight);
   border: 1px solid var(--panel-border);
-  color: var(--text-primary);
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 15px;
+  transition: all 0.2s ease;
 }
 
 .icon-btn:active {
   transform: scale(0.95);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--primary-glow);
 }
 
 /* Member Quick Filter Toolbar */
@@ -170,7 +171,7 @@ body {
   left: 0;
   right: 0;
   height: 48px;
-  background: rgba(12, 12, 14, 0.5);
+  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   border-bottom: 1px solid var(--panel-border);
@@ -1015,7 +1016,7 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: var(--tab-nav-height);
+  height: 70px;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
@@ -1024,6 +1025,7 @@ body {
   align-items: center;
   justify-content: space-around;
   padding-bottom: var(--safe-area-bottom);
+  box-sizing: content-box;
   z-index: 100;
 }
 

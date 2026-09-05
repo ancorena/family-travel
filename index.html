@@ -263,28 +263,23 @@
        ========================================================================== */ -->
   <nav class="app-nav">
     <a class="nav-item active" onclick="switchTab('itinerary')">
-      <img src="icon-itinerary.jpg" alt="行程" style="width: 34px; height: 34px; border-radius: 50%;">
-      <span>行程日程</span>
+      <img src="icon-itinerary.jpg" alt="行程" style="width: 48px; height: 48px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
       <div class="nav-glow"></div>
     </a>
     <a class="nav-item" onclick="switchTab('info')">
-      <img src="icon-lodging.jpg" alt="住宿" style="width: 34px; height: 34px; border-radius: 50%;">
-      <span>住宿景點</span>
+      <img src="icon-lodging.jpg" alt="住宿" style="width: 48px; height: 48px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
       <div class="nav-glow"></div>
     </a>
     <a class="nav-item" onclick="switchTab('chat')">
-      <img src="icon-chat.jpg" alt="對話" style="width: 34px; height: 34px; border-radius: 50%;">
-      <span>加密對話</span>
+      <img src="icon-chat.jpg" alt="對話" style="width: 48px; height: 48px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
       <div class="nav-glow"></div>
     </a>
     <a class="nav-item" onclick="switchTab('expenses')">
-      <img src="icon-expenses.jpg" alt="記帳" style="width: 34px; height: 34px; border-radius: 50%;">
-      <span>旅行記帳</span>
+      <img src="icon-expenses.jpg" alt="記帳" style="width: 48px; height: 48px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
       <div class="nav-glow"></div>
     </a>
     <a class="nav-item" onclick="switchTab('family')">
-      <img src="icon-family.jpg" alt="成員" style="width: 34px; height: 34px; border-radius: 50%;">
-      <span>成員設定</span>
+      <img src="icon-family.jpg" alt="成員" style="width: 48px; height: 48px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
       <div class="nav-glow"></div>
     </a>
   </nav>
@@ -552,7 +547,26 @@
       
       <p class="card-subtitle" style="margin-bottom: 12px;">點擊專案可切換旅行計劃。每個專案的資料與加密對話完全獨立。</p>
       
-      <div id="project-list-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+      <h3 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">編輯目前旅程</h3>
+      <div style="background: rgba(0,0,0,0.02); padding: 12px; border-radius: 12px; border: 1px solid var(--panel-border); margin-bottom: 20px;">
+        <div class="form-group">
+          <label class="form-label" for="edit-trip-name">旅程名稱</label>
+          <input type="text" class="form-input" id="edit-trip-name" onchange="updateTripNameAndDate()">
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="edit-trip-start">開始日期</label>
+            <input type="date" class="form-input" id="edit-trip-start" onchange="updateTripNameAndDate()">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="edit-trip-end">結束日期</label>
+            <input type="date" class="form-input" id="edit-trip-end" onchange="updateTripNameAndDate()">
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">所有旅程專案</h3>
+      <div id="project-list-container" style="max-height: 200px; overflow-y: auto; margin-bottom: 20px;">
         <!-- JS dynamically renders project list -->
       </div>
       

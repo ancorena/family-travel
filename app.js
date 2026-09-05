@@ -188,7 +188,51 @@ function saveToLocalStorage() {
 // === 專案管理 UI 邏輯 ===
 function openProjectManager() {
   renderProjectList();
+  
+  // 載入目前旅行的名稱與日期
+  document.getElementById("edit-trip-name").value = state.tripName || "";
+  
+  const dates = (state.tripDates || "").split(" - ");
+  if (dates.length === 2) {
+    document.getElementById("edit-trip-start").value = dates[0].replace(/\./g, '-');
+    document.getElementById("edit-trip-end").value = dates[1].replace(/\./g, '-');
+  } else {
+    // 嘗試從 projects array 取得
+    const proj = projects.find(p => p.id === currentProjectId);
+    if (proj) {
+      document.getElementById("edit-trip-start").value = proj.start;
+      document.getElementById("edit-trip-end").value = proj.end;
+    }
+  }
+  
   openModal('modal-projects');
+}
+
+function updateTripNameAndDate() {
+  const name = document.getElementById("edit-trip-name").value.trim();
+  const start = document.getElementById("edit-trip-start").value;
+  const end = document.getElementById("edit-trip-end").value;
+  
+  if (!name || !start || !end) return;
+  
+  const startStr = start.replace(/-/g, '.');
+  const endStr = end.replace(/-/g, '.');
+  
+  state.tripName = name;
+  state.tripDates = `${startStr} - ${endStr}`;
+  
+  // 更新 projects 陣列
+  const proj = projects.find(p => p.id === currentProjectId);
+  if (proj) {
+    proj.name = name;
+    proj.start = start;
+    proj.end = end;
+    saveProjectList();
+  }
+  
+  saveToLocalStorage();
+  renderAllViews();
+  renderProjectList();
 }
 
 function renderProjectList() {
