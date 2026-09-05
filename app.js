@@ -10,8 +10,9 @@
  * 6. 動態 SVG 圓餅圖繪製
  * 7. 端對端加密模組 (Web Crypto AES-GCM-256 & PBKDF2)
  * 8. 去中心化 Nostr WebSocket 即時通訊模組
- * 9. 資料一鍵匯出/匯入const APP_VERSION = "v38";
-
+ * 9. 資料一鍵匯出/匯入 JSON 引擎
+ */
+const APP_VERSION = "v41";
 function getContrastColor(hexcolor) {
   if (!hexcolor) return "#ffffff";
   hexcolor = hexcolor.replace("#", "");

@@ -1,9 +1,9 @@
-const CACHE_NAME = 'family-travel-v40';
+const CACHE_NAME = 'family-travel-v41';
 const ASSETS = [
   './',
-  './index.html?v=40',
-  './app.css?v=40',
-  './app.js?v=40',
+  './index.html?v=41',
+  './app.css?v=41',
+  './app.js?v=41',
   './manifest.json',
   './app-icon.jpg',
   './icon-itinerary.jpg',
