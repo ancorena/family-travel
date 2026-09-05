@@ -1,4 +1,4 @@
-const CACHE_NAME = 'family-travel-v32';
+const CACHE_NAME = 'family-travel-v33';
 const ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,8 @@ const ASSETS = [
   './icon-lodging.jpg',
   './icon-expenses.jpg',
   './icon-chat.jpg',
-  './icon-family.jpg'
+  './icon-family.jpg',
+  './wood-texture.jpg'
 ];
 
 // Install Service Worker
