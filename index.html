@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="家族旅行小幫手">
   <meta name="theme-color" content="#121218">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%237c8b96%22/><text y=%222.9em%22 x=%225px%22 font-size=%2240%22 fill=%22white%22 font-family=%22sans-serif%22 font-weight=%22bold%22>TRIP</text></svg>">
+  <link rel="apple-touch-icon" href="app-icon.jpg">
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="app.css">
@@ -21,6 +21,38 @@
 </script>
 </head>
 <body>
+  
+  <!-- 前端簡易密碼鎖 -->
+  <div id="app-lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 30px;">
+      <img src="app-icon.jpg" alt="Logo" style="width: 100px; height: 100px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+      <h2 style="margin: 0; font-size: 24px;">家族旅行小幫手</h2>
+      <p style="color: var(--text-muted); margin-top: 8px;">Private Access Only</p>
+    </div>
+    <div style="background: var(--card-bg); padding: 24px; border-radius: 20px; width: 100%; max-width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+      <input type="password" id="access-password" placeholder="請輸入通關密碼" style="width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: var(--text-color); margin-bottom: 16px; font-size: 16px; text-align: center;">
+      <button onclick="checkAccessPassword()" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 16px;">解鎖進入</button>
+    </div>
+  </div>
+  <script>
+    // 檢查是否有記住密碼
+    if (localStorage.getItem('family_travel_unlocked') === 'true') {
+      document.getElementById('app-lock-screen').style.display = 'none';
+    }
+    
+    function checkAccessPassword() {
+      const pwd = document.getElementById('access-password').value;
+      if (pwd === 'happy2026') { // 預設密碼
+        localStorage.setItem('family_travel_unlocked', 'true');
+        document.getElementById('app-lock-screen').style.opacity = '0';
+        setTimeout(() => {
+          document.getElementById('app-lock-screen').style.display = 'none';
+        }, 300);
+      } else {
+        alert('密碼錯誤，請重新輸入！');
+      }
+    }
+  </script>
 
   <!-- ==========================================================================
        APP HEADER
