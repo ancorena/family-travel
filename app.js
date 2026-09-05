@@ -1032,8 +1032,14 @@ function deleteLodging(id) {
 async function initNostrKeys() {
   let nostrLib;
   try {
-    nostrLib = window.nostrTools || await import("https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm");
-    window.nostrTools = nostrLib;
+    if (window.nostrTools) {
+      nostrLib = window.nostrTools;
+    } else {
+      const importPromise = import("https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm");
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading nostr-tools")), 3000));
+      nostrLib = await Promise.race([importPromise, timeoutPromise]);
+      window.nostrTools = nostrLib;
+    }
   } catch (e) {
     console.warn("無法載入 nostr-tools，簽章可能無效:", e);
   }
@@ -1164,17 +1170,18 @@ async function decryptText(payload) {
  * 5. 去中心化 Nostr WebSockets 連線
  * 使用公開的免費中繼伺服器 wss://nos.lol
  */
+let currentRelayIndex = 0;
+const relays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
+
 function connectToNostrRelay() {
   try {
-    // 使用多個中繼站備援
-    const relays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
-    const relayUrl = relays[0]; // 主要使用 damus.io（較寬鬆）
+    const relayUrl = relays[currentRelayIndex];
     
     console.log(`正在連線至 Nostr 去中心化中繼伺服器 (${relayUrl})...`);
     nostrWebSocket = new WebSocket(relayUrl);
     
     nostrWebSocket.onopen = () => {
-      console.log("Nostr 中繼伺服器連線成功！開始訂閱加密對話頻道...");
+      console.log(`Nostr 中繼伺服器 (${relayUrl}) 連線成功！開始訂閱加密對話頻道...`);
       
       // 以 Trip ID 雜湊值作為 Nostr 訂閱的頻道標籤 (#t)
       const channelTag = state.tripName + "_" + state.chatPassphrase;
@@ -1232,11 +1239,15 @@ function connectToNostrRelay() {
               state.chatMessages.push(msgObj);
               
               // 限制最多 100 筆對話，防溢出
-              if (state.chatMessages.length > 100) state.chatMessages.shift();
+              if (state.chatMessages.length > 100) {
+                state.chatMessages = state.chatMessages.slice(-100);
+              }
               
               saveToLocalStorage();
-              renderChatMessages();
-              scrollChatToBottom();
+              if (state.currentTab === "chat") {
+                renderChatMessages();
+                scrollChatToBottom();
+              }
             }
           }
         }
@@ -1246,12 +1257,13 @@ function connectToNostrRelay() {
     };
     
     nostrWebSocket.onclose = () => {
-      console.warn("Nostr 中繼連線中斷，將在 10 秒後嘗試背景重連...");
-      setTimeout(connectToNostrRelay, 10000);
+      console.warn(`Nostr 中繼連線中斷 (${relayUrl})，將嘗試下一個中繼站...`);
+      currentRelayIndex = (currentRelayIndex + 1) % relays.length;
+      setTimeout(connectToNostrRelay, 3000);
     };
     
     nostrWebSocket.onerror = (err) => {
-      console.error("Nostr WebSocket 錯誤:", err);
+      console.error(`Nostr WebSocket 錯誤 (${relayUrl}):`, err);
     };
     
   } catch (e) {
@@ -2189,8 +2201,16 @@ function importTripCode() {
  * 透過 Nostr 加密頻道向在線家人即時推播行程更新
  */
 async function broadcastStateUpdate() {
-  if (!nostrWebSocket || nostrWebSocket.readyState !== WebSocket.OPEN) {
-    alert("目前未連線至中繼伺服器，無法推播。請檢查網路或稍後再試。");
+  if (!nostrWebSocket) {
+    alert("尚未初始化通訊模組，請重新載入網頁。");
+    return;
+  }
+  if (nostrWebSocket.readyState === WebSocket.CONNECTING) {
+    alert("正在連線至中繼伺服器，請稍候幾秒再試一次...");
+    return;
+  }
+  if (nostrWebSocket.readyState !== WebSocket.OPEN) {
+    alert("目前未連線至中繼伺服器 (可能被防火牆阻擋或網路不穩)，系統正嘗試備援連線中。請稍後再試。");
     return;
   }
   
