@@ -1170,57 +1170,50 @@ async function decryptText(payload) {
  * 5. 去中心化 Nostr WebSockets 連線
  * 使用公開的免費中繼伺服器 wss://nos.lol
  */
-let currentRelayIndex = 0;
+let nostrWebSockets = [];
 const relays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
 
 function connectToNostrRelay() {
+  nostrWebSockets.forEach(ws => { try { ws.close(); } catch(e){} });
+  nostrWebSockets = [];
+  
+  const channelTag = state.tripName + "_" + state.chatPassphrase;
+  const subscription = [
+    "REQ", "family_chat_sub",
+    { kinds: [22447], "#t": [channelTag], limit: 50 }
+  ];
+
+  relays.forEach(relayUrl => {
+    connectSingleRelay(relayUrl, subscription);
+  });
+}
+
+function connectSingleRelay(relayUrl, subscription) {
   try {
-    const relayUrl = relays[currentRelayIndex];
-    
     console.log(`正在連線至 Nostr 去中心化中繼伺服器 (${relayUrl})...`);
-    nostrWebSocket = new WebSocket(relayUrl);
+    const ws = new WebSocket(relayUrl);
+    nostrWebSockets.push(ws);
     
-    nostrWebSocket.onopen = () => {
+    ws.onopen = () => {
       console.log(`Nostr 中繼伺服器 (${relayUrl}) 連線成功！開始訂閱加密對話頻道...`);
-      
-      // 以 Trip ID 雜湊值作為 Nostr 訂閱的頻道標籤 (#t)
-      const channelTag = state.tripName + "_" + state.chatPassphrase;
-      
-      // 送出訂閱需求 REQ
-      const subId = "family_chat_sub";
-      const subscription = [
-        "REQ",
-        subId,
-        {
-          kinds: [22447], // 使用 P2P 自訂應用 Kind
-          "#t": [channelTag], // 以旅行專屬標籤過濾
-          limit: 50 // 抓最新 50 筆
-        }
-      ];
-      nostrWebSocket.send(JSON.stringify(subscription));
+      ws.send(JSON.stringify(subscription));
     };
     
-    nostrWebSocket.onmessage = async (event) => {
+    ws.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data[0] === "OK") {
-          console.log("[Nostr] Server accepted event:", data[1]);
+          console.log(`[Nostr ${relayUrl}] Server accepted event:`, data[1]);
         } else if (data[0] === "NOTICE") {
-          console.warn("[Nostr] NOTICE:", data[1]);
+          console.warn(`[Nostr ${relayUrl}] NOTICE:`, data[1]);
         } else if (data[0] === "EVENT" && data[2]) {
           const nostrEvent = data[2];
-          // 收到新 Event
           const encryptedPayload = nostrEvent.content;
           
-          // 在本地解密
           const decryptedText = await decryptText(encryptedPayload);
-          
-          // 解析發送者與訊息包
           const msgObj = JSON.parse(decryptedText);
           
           if (msgObj.type === "STATE_SYNC") {
-            // 處理即時行程廣播（智慧合併）
-            // 只要不是自己發出的推播（比對 deviceId）且時間較新，就允許合併
             if (msgObj.deviceId !== myDeviceId && msgObj.timestamp > (state.lastSyncTimestamp || 0)) {
               const senderName = state.members[msgObj.sender]?.name || "家人";
               if (confirm(`收到來自「${senderName}」的最新行程與記帳更新，是否立刻合併？\n(您自己新增的項目會保留，不會被覆蓋)`)) {
@@ -1229,21 +1222,16 @@ function connectToNostrRelay() {
               }
             }
           } else if (msgObj.type === "IDENTITY_CLAIM") {
-            // 處理身份衝突偵測
             if (msgObj.deviceId !== myDeviceId && msgObj.claimedId === currentActiveUserId) {
               const claimedName = state.members[msgObj.claimedId]?.name || "未知";
               alert(`⚠️ 身份衝突警告！\n\n另一台裝置剛剛將自己設定為「${claimedName}」，和您目前的身份相同。\n\n這會導致聊天訊息與記帳分攤混亂。請其中一方立刻到「成員設定」頁面切換成自己的身份。`);
             }
           } else {
-            // 處理一般聊天訊息，避免重覆加入
             if (!state.chatMessages.some(m => m.id === msgObj.id)) {
               state.chatMessages.push(msgObj);
-              
-              // 限制最多 100 筆對話，防溢出
               if (state.chatMessages.length > 100) {
                 state.chatMessages = state.chatMessages.slice(-100);
               }
-              
               saveToLocalStorage();
               if (state.currentTab === "chat") {
                 renderChatMessages();
@@ -1252,23 +1240,21 @@ function connectToNostrRelay() {
             }
           }
         }
-      } catch (err) {
-        // 忽略非格式化資料
-      }
+      } catch (err) { }
     };
     
-    nostrWebSocket.onclose = () => {
-      console.warn(`Nostr 中繼連線中斷 (${relayUrl})，將嘗試下一個中繼站...`);
-      currentRelayIndex = (currentRelayIndex + 1) % relays.length;
-      setTimeout(connectToNostrRelay, 3000);
+    ws.onclose = () => {
+      console.warn(`Nostr 中繼連線中斷 (${relayUrl})，將在 5 秒後嘗試重連...`);
+      nostrWebSockets = nostrWebSockets.filter(s => s !== ws);
+      setTimeout(() => connectSingleRelay(relayUrl, subscription), 5000);
     };
     
-    nostrWebSocket.onerror = (err) => {
-      console.error(`Nostr WebSocket 錯誤 (${relayUrl}):`, err);
+    ws.onerror = (err) => {
+      console.error(`Nostr WebSocket 錯誤 (${relayUrl})`);
     };
     
   } catch (e) {
-    console.error("連線 Nostr 失敗:", e);
+    console.error(`連線 Nostr 失敗 (${relayUrl}):`, e);
   }
 }
 
@@ -1276,8 +1262,9 @@ function connectToNostrRelay() {
  * 6. 向 Nostr 網路發送 AES 端對端加密訊息
  */
 async function publishEncryptedMessageToNostr(messageObject) {
-  if (!nostrWebSocket || nostrWebSocket.readyState !== WebSocket.OPEN) {
-    console.warn("WebSocket 未就緒，訊息暫存於本地");
+  const openSockets = nostrWebSockets.filter(ws => ws.readyState === 1);
+  if (openSockets.length === 0) {
+    console.warn("所有 WebSocket 皆未就緒，無法發送");
     return false;
   }
   
@@ -1337,7 +1324,20 @@ async function publishEncryptedMessageToNostr(messageObject) {
     const envelope = ["EVENT", event];
     const envelopeStr = JSON.stringify(envelope);
     console.log(`[Nostr] 發送封包大小: ${(new Blob([envelopeStr]).size / 1024).toFixed(1)} KB`);
-    nostrWebSocket.send(envelopeStr);
+    
+    let sentCount = 0;
+    nostrWebSockets.forEach(ws => {
+      if (ws.readyState === 1) { // WebSocket.OPEN
+        ws.send(envelopeStr);
+        sentCount++;
+      }
+    });
+    
+    if (sentCount === 0) {
+      console.warn("目前沒有可用的 Nostr 中繼站連線");
+      return false;
+    }
+    
     return true;
   } catch (e) {
     console.error("發布訊息至 Nostr 失敗:", e);
@@ -2202,16 +2202,9 @@ function importTripCode() {
  * 透過 Nostr 加密頻道向在線家人即時推播行程更新
  */
 async function broadcastStateUpdate() {
-  if (!nostrWebSocket) {
-    alert("尚未初始化通訊模組，請重新載入網頁。");
-    return;
-  }
-  if (nostrWebSocket.readyState === WebSocket.CONNECTING) {
-    alert("正在連線至中繼伺服器，請稍候幾秒再試一次...");
-    return;
-  }
-  if (nostrWebSocket.readyState !== WebSocket.OPEN) {
-    alert("目前未連線至中繼伺服器 (可能被防火牆阻擋或網路不穩)，系統正嘗試備援連線中。請稍後再試。");
+  const openSockets = nostrWebSockets.filter(ws => ws.readyState === 1);
+  if (openSockets.length === 0) {
+    alert("目前未連線至任何中繼伺服器 (可能正在重新連線中，或被防火牆阻擋)。系統會在背景持續重試，請稍後再試。");
     return;
   }
   
