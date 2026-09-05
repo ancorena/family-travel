@@ -15,7 +15,10 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="app.css">
-<script src="https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/nostr-tools.min.js"></script>
+<script type="module">
+  import * as nostrTools from "https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm";
+  window.nostrTools = nostrTools;
+</script>
 </head>
 <body>
 

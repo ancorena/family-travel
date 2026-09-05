@@ -142,7 +142,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadFromLocalStorage();
   
   // 3. 初始化隨機 Nostr 私密金鑰
-  initNostrKeys();
+  await initNostrKeys();
   
   // 4. 計算並導出 AES 加密密鑰
   await deriveChatKey();
@@ -1029,20 +1029,40 @@ function deleteLodging(id) {
 /**
  * 1. 隨機生成 Nostr 金鑰對（本地通訊用）
  */
-function initNostrKeys() {
-  const savedSec = localStorage.getItem("temp_nostr_sec");
-  if (savedSec) {
-    myTempNostrPrivateKey = savedSec;
-  } else {
-    // 生成隨機十六進位 32 bytes 鑰匙作為臨時 Nostr 私鑰
-    const hex = '0123456789abcdef';
-    let key = '';
-    for (let i = 0; i < 64; i++) key += hex[Math.floor(Math.random() * 16)];
-    myTempNostrPrivateKey = key;
-    localStorage.setItem("temp_nostr_sec", key);
+async function initNostrKeys() {
+  let nostrLib;
+  try {
+    nostrLib = window.nostrTools || await import("https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm");
+    window.nostrTools = nostrLib;
+  } catch (e) {
+    console.warn("無法載入 nostr-tools，簽章可能無效:", e);
   }
-  // 隨機生成對應的公鑰
-  myTempNostrPublicKey = myTempNostrPrivateKey.substring(0, 32);
+
+  let savedSec = localStorage.getItem("temp_nostr_sec");
+  if (!savedSec || savedSec.length !== 64) {
+    if (nostrLib && typeof nostrLib.generatePrivateKey === "function") {
+      savedSec = nostrLib.generatePrivateKey();
+    } else {
+      const hex = '0123456789abcdef';
+      savedSec = '';
+      for (let i = 0; i < 64; i++) savedSec += hex[Math.floor(Math.random() * 16)];
+    }
+    localStorage.setItem("temp_nostr_sec", savedSec);
+  }
+  myTempNostrPrivateKey = savedSec;
+
+  try {
+    if (nostrLib && typeof nostrLib.getPublicKey === "function") {
+      myTempNostrPublicKey = nostrLib.getPublicKey(myTempNostrPrivateKey);
+    } else {
+      myTempNostrPublicKey = myTempNostrPrivateKey.substring(0, 32).padEnd(64, '0');
+    }
+  } catch (err) {
+    console.error("公鑰導出失敗，重置私鑰:", err);
+    localStorage.removeItem("temp_nostr_sec");
+    // 遞迴重試一次
+    return await initNostrKeys();
+  }
 }
 
 /**
@@ -1176,7 +1196,11 @@ function connectToNostrRelay() {
     nostrWebSocket.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data[0] === "EVENT" && data[2]) {
+        if (data[0] === "OK") {
+          console.log("[Nostr] Server accepted event:", data[1]);
+        } else if (data[0] === "NOTICE") {
+          console.warn("[Nostr] NOTICE:", data[1]);
+        } else if (data[0] === "EVENT" && data[2]) {
           const nostrEvent = data[2];
           // 收到新 Event
           const encryptedPayload = nostrEvent.content;
@@ -1246,14 +1270,11 @@ async function publishEncryptedMessageToNostr(messageObject) {
   
   try {
     const textString = JSON.stringify(messageObject);
-    
-    // 檢查訊息大小（Nostr 中繼站通常限制 64KB）
+    // 檢查訊息大小 (Nostr 中繼站上限約 64KB)
     const rawSize = new Blob([textString]).size;
     console.log(`[Nostr] 訊息原始大小: ${(rawSize / 1024).toFixed(1)} KB`);
-    
     if (rawSize > 48000) {
       console.warn("[Nostr] 訊息過大，嘗試精簡...");
-      // 如果是 STATE_SYNC，移除不必要的大型欄位
       if (messageObject.type === "STATE_SYNC" && messageObject.payload) {
         delete messageObject.payload.chatMessages;
         delete messageObject.payload.lastSyncTimestamp;
@@ -1261,41 +1282,47 @@ async function publishEncryptedMessageToNostr(messageObject) {
     }
     
     const finalText = JSON.stringify(messageObject);
-    
-    // 端對端加密
     const encryptedResult = await encryptText(finalText);
     if (!encryptedResult.isEncrypted) return false;
     
-    // 包裝成標準 Nostr 協定格式 (Event kind 22447)
     const channelTag = state.tripName + "_" + state.chatPassphrase;
     const timestampSec = Math.floor(Date.now() / 1000);
-    
-    // 產生合規的 Event ID (SHA-256 of serialized event)
     const eventContent = encryptedResult.payload;
-    const serialized = JSON.stringify([
-      0, myTempNostrPublicKey, timestampSec, 22447,
-      [["t", channelTag]], eventContent
-    ]);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialized));
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const eventId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    const eventPubkey = myTempNostrPublicKey.padEnd(64, '0');
     
-    const event = {
-      id: eventId,
-      pubkey: myTempNostrPublicKey.padEnd(64, '0'),
+    // 組裝事件 (符合 NIP-01)
+    let event = {
+      pubkey: eventPubkey,
       created_at: timestampSec,
       kind: 22447,
-      tags: [
-        ["t", channelTag]
-      ],
-      content: eventContent,
-      sig: eventId // 簡化簽章（自訂 Kind 通常不做嚴格驗證）
+      tags: [["t", channelTag]],
+      content: eventContent
     };
     
-    // 發布 EVENT
+    if (window.nostrTools && typeof window.nostrTools.getEventHash === "function") {
+      event.id = window.nostrTools.getEventHash(event);
+    } else {
+      const serialized = JSON.stringify([0, eventPubkey, timestampSec, 22447, [["t", channelTag]], eventContent]);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialized));
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      event.id = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    
+    try {
+      if (window.nostrTools && typeof window.nostrTools.signEvent === "function") {
+        const sigResult = window.nostrTools.signEvent(event, myTempNostrPrivateKey);
+        event.sig = typeof sigResult === 'string' ? sigResult : (sigResult.sig || sigResult);
+      } else {
+        console.warn("未偵測到 nostr-tools，無法簽名");
+        event.sig = ""; 
+      }
+    } catch (signErr) {
+      console.error("Nostr 事件簽名失敗:", signErr);
+      event.sig = "";
+    }
+    
     const envelope = ["EVENT", event];
     const envelopeStr = JSON.stringify(envelope);
-    
     console.log(`[Nostr] 發送封包大小: ${(new Blob([envelopeStr]).size / 1024).toFixed(1)} KB`);
     nostrWebSocket.send(envelopeStr);
     return true;
