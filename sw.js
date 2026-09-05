@@ -1,11 +1,16 @@
-const CACHE_NAME = 'family-travel-v31';
+const CACHE_NAME = 'family-travel-v32';
 const ASSETS = [
   './',
   './index.html',
   './app.css',
   './app.js',
   './manifest.json',
-  './app-icon.jpg'
+  './app-icon.jpg',
+  './icon-itinerary.jpg',
+  './icon-lodging.jpg',
+  './icon-expenses.jpg',
+  './icon-chat.jpg',
+  './icon-family.jpg'
 ];
 
 // Install Service Worker

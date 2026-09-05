@@ -1,31 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 /* ==========================================================================
-   CSS VARIABLES & GLOBAL SETTINGS (Low-Saturation Matte Designer Theme)
+   CSS VARIABLES & GLOBAL SETTINGS (Hand-Drawn Watercolor Light Theme)
    ========================================================================== */
 :root {
-  --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-family: 'Outfit', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   
-  /* Color Palette - Ultra-low Saturation, Architectural Matte Dark */
-  --bg-dark: #0b0b0c;
-  --bg-gradient: linear-gradient(180deg, #101012 0%, #0b0b0c 100%);
-  --panel-bg: rgba(22, 22, 25, 0.5);
-  --panel-border: rgba(255, 255, 255, 0.05);
-  --panel-highlight: rgba(255, 255, 255, 0.08);
+  /* Color Palette - Warm Watercolor Paper */
+  --bg-dark: #fcf9f2;           /* Off-white paper background */
+  --bg-gradient: linear-gradient(180deg, #fcf9f2 0%, #f4f0e6 100%);
+  --panel-bg: rgba(255, 255, 255, 0.7);
+  --panel-border: rgba(0, 0, 0, 0.08);
+  --panel-highlight: rgba(0, 0, 0, 0.03);
   
-  --text-primary: #e4e4e7;      /* Warm white */
-  --text-secondary: #9f9fa9;    /* Muted slate gray */
-  --text-muted: #5e5e64;        /* Dark zinc */
+  --text-primary: #3a3f45;      /* Ink Charcoal */
+  --text-secondary: #747b85;    /* Muted ink */
+  --text-muted: #a3aab3;        /* Soft gray */
   
   /* Designer Low-Saturation Theme Accents */
-  --primary: #c5a880;           /* Muted Champagne Gold / Bronze */
-  --primary-glow: rgba(197, 168, 128, 0.06);
-  --accent-purple: #9a8f85;     /* Warm Sandstone */
-  --accent-cyan: #7c8b96;       /* Dusty Slate Blue */
-  --accent-green: #8d9282;      /* Muted Sage Green */
-  --accent-orange: #b59b8a;     /* Muted Warm Terracotta */
-  --accent-pink: #a89f9e;       /* Muted Ash Rose */
-  --accent-red: #a58b8b;        /* Muted Dusty Crimson */
+  --primary: #94a8bd;           /* Watercolor Sky Blue (from plane) */
+  --primary-glow: rgba(148, 168, 189, 0.15);
+  --accent-purple: #c5a880;     /* Muted Sandstone */
+  --accent-cyan: #94a8bd;       /* Watercolor Sky Blue */
+  --accent-green: #90a983;      /* Fuji Forest Green */
+  --accent-orange: #d4b895;     /* Suitcase Tan */
+  --accent-pink: #cba483;       /* Warm blush */
+  --accent-red: #c57b7b;        /* Muted Dusty Crimson */
   
   /* Safe Area paddings for notched mobile screens */
   --safe-area-top: env(safe-area-inset-top, 0px);
@@ -1008,7 +1008,7 @@ body {
   left: 0;
   right: 0;
   height: var(--tab-nav-height);
-  background: rgba(12, 12, 14, 0.85);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   border-top: 1px solid var(--panel-border);
