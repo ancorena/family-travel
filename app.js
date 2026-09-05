@@ -1935,6 +1935,7 @@ function renameMember(mId) {
   }
   
   member.name = trimmed;
+  member.lastModified = Date.now();
   saveToLocalStorage();
   renderAllViews();
 }
@@ -1962,7 +1963,7 @@ function handleAddMember(e) {
   const newId = "m_" + Date.now();
   
   // 新增成員
-  state.members[newId] = { name, color };
+  state.members[newId] = { name, color, lastModified: Date.now() };
   saveToLocalStorage();
   
   nameInput.value = "";
@@ -2289,6 +2290,13 @@ function mergeMembers(localMembers, remoteMembers) {
   Object.keys(remoteMembers || {}).forEach(key => {
     if (!merged[key]) {
       merged[key] = remoteMembers[key]; // 對方新增的成員
+    } else {
+      // 雙方都有，比較修改時間
+      const localTime = merged[key].lastModified || 0;
+      const remoteTime = remoteMembers[key].lastModified || 0;
+      if (remoteTime > localTime) {
+        merged[key] = remoteMembers[key];
+      }
     }
   });
   return merged;
@@ -2352,7 +2360,8 @@ function mergeIncomingState(remoteState, syncTimestamp) {
  * 向在線家人廣播「我是誰」的宣告，用於偵測身份重複
  */
 async function broadcastIdentityClaim(claimedMemberId) {
-  if (!nostrWebSocket || nostrWebSocket.readyState !== WebSocket.OPEN) {
+  const openSockets = nostrWebSockets.filter(ws => ws.readyState === 1);
+  if (openSockets.length === 0) {
     return; // 靜默失敗，不打擾使用者
   }
   
