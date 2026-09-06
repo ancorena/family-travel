@@ -4,6 +4,7 @@
    CSS VARIABLES & GLOBAL SETTINGS (Hand-Drawn Watercolor Light Theme)
    ========================================================================== */
 :root {
+  color-scheme: light;
   --font-family: 'Outfit', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   
   /* Color Palette - Warm Watercolor Paper */
