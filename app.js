@@ -526,22 +526,23 @@ function getDayOfWeek(dateStr) {
 let editingLocationDay = null;
 
 function openDayLocationModal(targetDay) {
-  editingLocationDay = parseInt(targetDay) || (state.activeDay === 'all' ? 1 : parseInt(state.activeDay) || 1);
-  const dayObj = state.days.find(d => d.day === editingLocationDay);
+  const initialDay = parseInt(targetDay) || (state.activeDay === 'all' ? 1 : parseInt(state.activeDay) || 1);
+  const dayObj = state.days.find(d => d.day === initialDay);
   if (!dayObj) return;
 
   const titleEl = document.getElementById("location-modal-title");
-  if (titleEl) titleEl.innerText = `設定 Day ${dayObj.day} (${dayObj.date ? dayObj.date.substring(5) : ""}) 所在地`;
+  if (titleEl) titleEl.innerText = `設定所在地`;
 
   const labelEl = document.getElementById("location-modal-day-label");
-  if (labelEl) labelEl.innerText = `Day ${dayObj.day} 所在地城市 / 地區`;
+  if (labelEl) labelEl.innerText = `所在地城市 / 地區`;
 
-  const daySelect = document.getElementById("location-modal-day-select");
-  if (daySelect) {
-    daySelect.innerHTML = state.days.map(d => `
-      <option value="${d.day}" ${d.day === editingLocationDay ? "selected" : ""}>
-        Day ${d.day} (${d.date ? d.date.substring(5) : ""}) ${d.location ? "· " + d.location : ""}
-      </option>
+  const dayCheckboxes = document.getElementById("location-modal-day-checkboxes");
+  if (dayCheckboxes) {
+    dayCheckboxes.innerHTML = state.days.map(d => `
+      <label class="checkbox-pill ${d.day === initialDay ? 'active' : ''}" style="cursor: pointer; user-select: none;">
+        <input type="checkbox" value="${d.day}" ${d.day === initialDay ? "checked" : ""} style="display: none;" onchange="this.parentElement.classList.toggle('active', this.checked)">
+        Day ${d.day} ${d.date ? '(' + d.date.substring(5) + ')' : ''} ${d.location ? '· ' + d.location : ''}
+      </label>
     `).join("");
   }
 
@@ -553,26 +554,6 @@ function openDayLocationModal(targetDay) {
     setTimeout(() => inputEl.focus(), 150);
   }
   openModal("modal-day-location");
-}
-
-function switchLocationModalDay(newDay) {
-  editingLocationDay = parseInt(newDay);
-  const dayObj = state.days.find(d => d.day === editingLocationDay);
-  if (!dayObj) return;
-
-  const titleEl = document.getElementById("location-modal-title");
-  if (titleEl) titleEl.innerText = `設定 Day ${dayObj.day} (${dayObj.date ? dayObj.date.substring(5) : ""}) 所在地`;
-
-  const labelEl = document.getElementById("location-modal-day-label");
-  if (labelEl) labelEl.innerText = `Day ${dayObj.day} 所在地城市 / 地區`;
-
-  const inputEl = document.getElementById("input-day-location");
-  if (inputEl) {
-    inputEl.value = dayObj.location || "";
-    renderQuickLocationPills();
-    syncQuickLocationPills();
-    inputEl.focus();
-  }
 }
 
 /**
@@ -652,19 +633,29 @@ function setQuickLocation(city) {
 
 function saveDayLocation(e) {
   if (e) e.preventDefault();
-  const daySelect = document.getElementById("location-modal-day-select");
-  const targetDay = daySelect ? parseInt(daySelect.value) : editingLocationDay;
+  
+  const checkboxes = document.querySelectorAll("#location-modal-day-checkboxes input[type='checkbox']:checked");
+  const targetDays = Array.from(checkboxes).map(cb => parseInt(cb.value));
+  if (targetDays.length === 0 && editingLocationDay) {
+    targetDays.push(editingLocationDay);
+  }
+  
   const inputEl = document.getElementById("input-day-location");
   const rawVal = inputEl ? inputEl.value.trim() : "";
   
-  const dayObj = state.days.find(d => d.day === targetDay);
-  if (dayObj) {
-    if (rawVal) {
-      const locs = rawVal.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
-      dayObj.location = locs.join("、");
-    } else {
-      delete dayObj.location;
+  targetDays.forEach(day => {
+    const dayObj = state.days.find(d => d.day === day);
+    if (dayObj) {
+      if (rawVal) {
+        const locs = rawVal.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean);
+        dayObj.location = locs.join("、");
+      } else {
+        delete dayObj.location;
+      }
     }
+  });
+
+  if (targetDays.length > 0) {
     saveToLocalStorage();
     updateModalSelectDropdowns();
     renderItineraryTab();
@@ -673,11 +664,20 @@ function saveDayLocation(e) {
 }
 
 function clearDayLocation() {
-  const daySelect = document.getElementById("location-modal-day-select");
-  const targetDay = daySelect ? parseInt(daySelect.value) : editingLocationDay;
-  const dayObj = state.days.find(d => d.day === targetDay);
-  if (dayObj) {
-    delete dayObj.location;
+  const checkboxes = document.querySelectorAll("#location-modal-day-checkboxes input[type='checkbox']:checked");
+  const targetDays = Array.from(checkboxes).map(cb => parseInt(cb.value));
+  if (targetDays.length === 0 && editingLocationDay) {
+    targetDays.push(editingLocationDay);
+  }
+
+  targetDays.forEach(day => {
+    const dayObj = state.days.find(d => d.day === day);
+    if (dayObj) {
+      delete dayObj.location;
+    }
+  });
+
+  if (targetDays.length > 0) {
     saveToLocalStorage();
     updateModalSelectDropdowns();
     renderItineraryTab();

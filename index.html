@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="app-icon.jpg?v=2">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="app.css?v=49">
+  <link rel="stylesheet" href="app.css?v=50">
 <script type="module">
   import * as nostrTools from "https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm";
   window.nostrTools = nostrTools;
@@ -360,9 +360,9 @@
       
       <form id="form-day-location" onsubmit="saveDayLocation(event)">
         <div class="form-group">
-          <label class="form-label" for="location-modal-day-select">選擇天數</label>
-          <select class="form-select" id="location-modal-day-select" onchange="switchLocationModalDay(this.value)">
-          </select>
+          <label class="form-label">套用天數（可多選）</label>
+          <div class="checkbox-group" id="location-modal-day-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px;">
+          </div>
         </div>
 
         <div class="form-group">
@@ -666,7 +666,7 @@
   </div>
 
   <!-- JS Logic Application -->
-  <script src="app.js?v=49"></script>
+  <script src="app.js?v=50"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
