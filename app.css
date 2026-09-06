@@ -727,6 +727,315 @@ body {
 }
 
 /* ==========================================================================
+   OVERVIEW VIEW MODE SWITCHER & INFOGRAM PROJECT SCHEDULE
+   ========================================================================== */
+.overview-switcher {
+  display: flex;
+  background: var(--bg-deep);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.overview-switch-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.overview-switch-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.overview-switch-btn.active {
+  background: #ffffff;
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Infogram Dashboard Card */
+.infogram-dashboard {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.infogram-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.infogram-metric-item {
+  background: var(--bg-alt);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.infogram-metric-num {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.infogram-metric-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Infogram Milestone Route Stepper */
+.infogram-route-flow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: var(--bg-deep);
+  border-radius: 10px;
+  border: 1px dashed var(--panel-border);
+  margin-bottom: 12px;
+}
+
+.infogram-route-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--panel-bg);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+}
+
+.infogram-route-arrow {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* Infogram Category Ratio Bar */
+.infogram-ratio-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.05);
+  margin-bottom: 8px;
+}
+
+.infogram-ratio-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.infogram-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.infogram-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.infogram-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Infogram Daily Project Swimlanes */
+.infogram-day-lane {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.infogram-lane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.infogram-lane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.infogram-lane-date {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.infogram-lane-desc {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.infogram-lane-lodging {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(197, 168, 128, 0.12);
+  border: 1px solid rgba(197, 168, 128, 0.3);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: #7a6345;
+}
+
+.infogram-lane-lodging a {
+  color: #7a6345;
+  text-decoration: underline;
+}
+
+.infogram-timeline-track {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.infogram-event-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bg-alt);
+  border: 1px solid var(--panel-border);
+  border-left: 4px solid var(--panel-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.infogram-event-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+}
+
+.infogram-event-card.cat-flight {
+  border-left-color: var(--primary);
+  background: rgba(148, 168, 189, 0.09);
+}
+
+.infogram-event-card.cat-hotel {
+  border-left-color: var(--accent-purple);
+  background: rgba(197, 168, 128, 0.09);
+}
+
+.infogram-event-card.cat-attraction {
+  border-left-color: var(--accent-green);
+  background: rgba(144, 169, 131, 0.09);
+}
+
+.infogram-event-card.cat-dining {
+  border-left-color: var(--accent-orange);
+  background: rgba(212, 184, 149, 0.09);
+}
+
+.infogram-event-card.cat-shopping {
+  border-left-color: var(--accent-pink);
+  background: rgba(203, 164, 131, 0.09);
+}
+
+.infogram-event-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.infogram-event-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.infogram-event-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.infogram-event-time {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.infogram-event-notes {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+.infogram-event-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 3px;
+}
+
+.infogram-empty-lane {
+  padding: 12px;
+  text-align: center;
+  border: 1px dashed var(--panel-border);
+  border-radius: 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.01);
+}
+
+/* ==========================================================================
    3. END-TO-END ENCRYPTED CHAT VIEW (端對端加密群組聊天)
    ========================================================================== */
 .chat-wrapper {
