@@ -1331,9 +1331,10 @@ function renderItineraryTab() {
     
     if (locationBtn && locationText) {
       locationBtn.style.display = "inline-flex";
-      if (currentDayInfo.location) {
+      const locText = getDayLocationText(currentDayInfo);
+      if (locText) {
         locationBtn.className = "location-tag-btn has-location";
-        locationText.innerText = currentDayInfo.location;
+        locationText.innerText = locText;
         locationBtn.title = "點擊修改當天所在地";
       } else {
         locationBtn.className = "location-tag-btn";
