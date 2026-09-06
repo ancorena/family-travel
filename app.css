@@ -8,6 +8,9 @@
   
   /* Color Palette - Warm Watercolor Paper */
   --bg-dark: #fcf9f2;           /* Off-white paper background */
+  --bg-deep: #f2ece1;           /* Deeper warm beige paper tone (加深米白) */
+  --bg-subtle: #f8f4ec;         /* Soft paper tone */
+  --bg-alt: #ece5d6;            /* Secondary accent beige */
   --bg-gradient: linear-gradient(180deg, #fcf9f2 0%, #f4f0e6 100%);
   --panel-bg: rgba(255, 255, 255, 0.7);
   --panel-border: rgba(0, 0, 0, 0.08);
@@ -338,8 +341,8 @@ body {
 /* 今日住宿詳情區塊樣式 (Day Lodging Subcard) */
 .day-lodging-subcard {
   margin-top: 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-subtle);
+  border: 1px solid var(--panel-border);
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.3s ease;
@@ -351,7 +354,7 @@ body {
 
 .lodging-sub-card-inner.empty {
   padding: 10px;
-  background: rgba(255, 255, 255, 0.01);
+  background: var(--bg-deep);
 }
 
 .lodging-sub-title {
@@ -804,7 +807,7 @@ body {
 }
 
 .chat-input-bar {
-  background: rgba(12, 12, 14, 0.7);
+  background: var(--bg-deep);
   border-top: 1px solid var(--panel-border);
   padding: 6px 12px;
   display: flex;
@@ -819,7 +822,7 @@ body {
 
 .chat-input {
   flex: 1;
-  background: rgba(0, 0, 0, 0.03);
+  background: #ffffff;
   border: 1px solid var(--panel-border);
   border-radius: 16px;
   padding: 8px 14px;
@@ -831,7 +834,7 @@ body {
 
 .chat-input:focus {
   border-color: var(--primary);
-  background: rgba(0, 0, 0, 0.06);
+  background: #ffffff;
 }
 
 .chat-send-btn {
@@ -1088,7 +1091,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(45, 40, 35, 0.4);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -1108,13 +1111,13 @@ body {
 .modal-panel {
   width: 100%;
   max-width: 500px;
-  background: #0f0f11;
+  background: var(--bg-deep);
   border-top-left-radius: 24px;
   border-top-right-radius: 24px;
   border: 1px solid var(--panel-border);
   border-bottom: none;
   padding: 24px 20px calc(20px + var(--safe-area-bottom)) 20px;
-  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 -4px 30px rgba(60, 50, 40, 0.15);
   transform: translateY(100%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   max-height: 85vh;
@@ -1162,7 +1165,7 @@ body {
 
 .form-input, .form-select, .form-textarea {
   width: 100%;
-  background: rgba(0, 0, 0, 0.02);
+  background: #ffffff;
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   padding: 10px 12px;
@@ -1174,7 +1177,7 @@ body {
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   border-color: var(--primary);
-  background: rgba(0, 0, 0, 0.05);
+  background: #ffffff;
 }
 
 .form-textarea {
@@ -1192,7 +1195,7 @@ body {
   padding: 5px 10px;
   border-radius: 8px;
   font-size: 11px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-alt);
   border: 1px solid var(--panel-border);
   color: var(--text-secondary);
   cursor: pointer;
@@ -1201,9 +1204,9 @@ body {
 }
 
 .checkbox-pill.selected {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(148, 168, 189, 0.2);
   border-color: var(--primary);
-  color: var(--primary);
+  color: #3b5066;
 }
 
 .btn-group {
@@ -1227,7 +1230,7 @@ body {
 
 .btn-primary {
   background: var(--primary);
-  color: #121214;
+  color: #ffffff;
 }
 
 .btn-primary:active {
@@ -1236,14 +1239,14 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-alt);
   border: 1px solid var(--panel-border);
   color: var(--text-primary);
 }
 
 .btn-secondary:active {
   transform: scale(0.98);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* ==========================================================================
@@ -1297,7 +1300,7 @@ body {
   }
   
   .modal-overlay {
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(45, 40, 35, 0.4);
   }
   
   .modal-panel {
@@ -1316,14 +1319,14 @@ body {
   align-items: center;
   padding: 12px 16px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-alt);
   margin-bottom: 8px;
-  border: 1px solid transparent;
+  border: 1px solid var(--panel-border);
   transition: all 0.2s ease;
 }
 
 .project-item.active {
-  background: rgba(124, 139, 150, 0.1);
+  background: rgba(148, 168, 189, 0.18);
   border: 1px solid var(--primary);
 }
 
