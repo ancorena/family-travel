@@ -548,6 +548,7 @@ function openDayLocationModal(targetDay) {
   const inputEl = document.getElementById("input-day-location");
   if (inputEl) {
     inputEl.value = dayObj.location || "";
+    renderQuickLocationPills();
     syncQuickLocationPills();
     setTimeout(() => inputEl.focus(), 150);
   }
@@ -568,15 +569,57 @@ function switchLocationModalDay(newDay) {
   const inputEl = document.getElementById("input-day-location");
   if (inputEl) {
     inputEl.value = dayObj.location || "";
+    renderQuickLocationPills();
     syncQuickLocationPills();
     inputEl.focus();
+  }
+}
+
+/**
+ * 動態渲染快速點選城市列表（包含這次旅行曾經輸入過的所有城市）
+ */
+function renderQuickLocationPills() {
+  const defaultCities = ["東京", "京都", "大阪", "箱根", "富士山", "輕井澤", "橫濱", "鎌倉", "奈良", "神戶", "札幌", "沖繩", "福岡", "名古屋"];
+  
+  // 取得這次旅行曾經輸入過的所有城市
+  const tripCitiesSet = new Set();
+  (state.days || []).forEach(d => {
+    if (d.location) {
+      const parts = d.location.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
+      parts.forEach(p => tripCitiesSet.add(p));
+    }
+  });
+  const tripCities = Array.from(tripCitiesSet);
+
+  // 1. 本次旅行已輸入城市專屬區塊
+  const tripGroup = document.getElementById("group-trip-locations");
+  const tripContainer = document.getElementById("trip-used-locations");
+  if (tripGroup && tripContainer) {
+    if (tripCities.length > 0) {
+      tripGroup.style.display = "block";
+      tripContainer.innerHTML = tripCities.map(city => `
+        <span class="checkbox-pill" data-city="${city}" onclick="toggleQuickLocation('${city}')">${city}</span>
+      `).join("");
+    } else {
+      tripGroup.style.display = "none";
+      tripContainer.innerHTML = "";
+    }
+  }
+
+  // 2. 熱門推薦城市（自動合併旅行已用過的城市在最前端，且不重複）
+  const quickContainer = document.getElementById("quick-locations");
+  if (quickContainer) {
+    const combinedCities = [...new Set([...tripCities, ...defaultCities])];
+    quickContainer.innerHTML = combinedCities.map(city => `
+      <span class="checkbox-pill" data-city="${city}" onclick="toggleQuickLocation('${city}')">${city}</span>
+    `).join("");
   }
 }
 
 function syncQuickLocationPills() {
   const inputEl = document.getElementById("input-day-location");
   const current = inputEl ? inputEl.value.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean) : [];
-  const pills = document.querySelectorAll("#quick-locations .checkbox-pill");
+  const pills = document.querySelectorAll("#modal-day-location .checkbox-pill");
   pills.forEach(pill => {
     const city = pill.getAttribute("data-city") || pill.innerText.trim();
     if (current.includes(city)) {
