@@ -526,8 +526,16 @@ function getDayOfWeek(dateStr) {
 /**
  * 取得該天的所在地顯示字串 (支援分開各人行程)
  */
-function getDayLocationText(dayObj) {
+function getDayLocationText(dayObj, filterMemberId = null) {
   if (!dayObj) return "";
+  
+  if (filterMemberId && filterMemberId !== "all") {
+    if (dayObj.memberLocations && Object.keys(dayObj.memberLocations).length > 0) {
+      return dayObj.memberLocations[filterMemberId] || ""; 
+    }
+    return dayObj.location || "";
+  }
+
   if (dayObj.memberLocations && Object.keys(dayObj.memberLocations).length > 0) {
     const locs = {};
     Object.keys(dayObj.memberLocations).forEach(mId => {
@@ -547,13 +555,21 @@ function getDayLocationText(dayObj) {
 /**
  * 取得行程中出現過的所有城市清單
  */
-function getAllTripLocations() {
+function getAllTripLocations(filterMemberId = null) {
   const tripCitiesSet = new Set();
   (state.days || []).forEach(d => {
     const rawLocs = [];
-    if (d.location) rawLocs.push(d.location);
-    if (d.memberLocations) {
-      Object.values(d.memberLocations).forEach(loc => rawLocs.push(loc));
+    if (filterMemberId && filterMemberId !== "all") {
+      if (d.memberLocations && d.memberLocations[filterMemberId]) {
+        rawLocs.push(d.memberLocations[filterMemberId]);
+      } else if (d.location) {
+        rawLocs.push(d.location);
+      }
+    } else {
+      if (d.location) rawLocs.push(d.location);
+      if (d.memberLocations) {
+        Object.values(d.memberLocations).forEach(loc => rawLocs.push(loc));
+      }
     }
     rawLocs.forEach(raw => {
       const parts = raw.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean);
@@ -865,11 +881,20 @@ function renderInfogramOverview(container) {
   if (!container) return;
   container.innerHTML = "";
 
-  // 1. 計算全域指標與活動分類統計
+  // 1. 計算全域指標與活動分類統計 (受 filterMember 影響)
+  const filteredEvents = state.itinerary.filter(event => {
+    if (state.filterMember === "all") return true;
+    return event.members && event.members.includes(state.filterMember);
+  });
+  const filteredLodgings = state.accommodations.filter(hotel => {
+    if (state.filterMember === "all") return true;
+    return hotel.members && hotel.members.includes(state.filterMember);
+  });
+
   const totalDays = state.days.length;
-  const totalEvents = state.itinerary.length;
-  const totalLodging = state.accommodations.length;
-  const totalMembers = Object.keys(state.members || {}).length;
+  const totalEvents = filteredEvents.length;
+  const totalLodging = filteredLodgings.length;
+  const totalMembers = state.filterMember === "all" ? Object.keys(state.members || {}).length : 1;
 
   const catCounts = {
     flight: 0,
@@ -879,7 +904,7 @@ function renderInfogramOverview(container) {
     shopping: 0
   };
 
-  state.itinerary.forEach(ev => {
+  filteredEvents.forEach(ev => {
     const cat = ev.category || "attraction";
     if (catCounts[cat] !== undefined) {
       catCounts[cat]++;
@@ -888,14 +913,14 @@ function renderInfogramOverview(container) {
     }
   });
 
-  // 2. 城市足跡步進里程碑 (分群連續天數所在地)
+  // 2. 城市足跡步進里程碑 (分群連續天數所在地，依據 filterMember)
   const routeNodes = [];
   let currentLoc = null;
   let startDay = null;
   let endDay = null;
 
   state.days.forEach((d, idx) => {
-    const loc = getDayLocationText(d) || "未設定地點";
+    const loc = getDayLocationText(d, state.filterMember) || "未設定地點";
     if (loc !== currentLoc) {
       if (currentLoc !== null) {
         routeNodes.push({
@@ -1331,9 +1356,9 @@ function renderItineraryTab() {
     if (outlineTitleEl) outlineTitleEl.innerText = "旅途總覽";
     if (outlineBadgeEl) outlineBadgeEl.innerText = `全程 ${state.days.length} 天`;
     
-    // 全程足跡地點彙整（支援單日多個地點切分）
-    const allLocations = getAllTripLocations();
-    const uniqueLocations = allLocations;
+    // 全程足跡地點彙整（支援單日多個地點切分，且受 filterMember 影響）
+    const allLocations = getAllTripLocations(state.filterMember);
+    const uniqueLocations = Array.from(allLocations);
     if (locationBtn && locationText) {
       locationBtn.style.display = "inline-flex";
       if (uniqueLocations.length > 0) {
@@ -1371,7 +1396,7 @@ function renderItineraryTab() {
     
     if (locationBtn && locationText) {
       locationBtn.style.display = "inline-flex";
-      const locText = getDayLocationText(currentDayInfo);
+      const locText = getDayLocationText(currentDayInfo, state.filterMember);
       if (locText) {
         locationBtn.className = "location-tag-btn has-location";
         locationText.innerText = locText;
