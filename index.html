@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="app-icon.jpg?v=2">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="app.css?v=45">
+  <link rel="stylesheet" href="app.css?v=46">
 <script type="module">
   import * as nostrTools from "https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm";
   window.nostrTools = nostrTools;
@@ -99,7 +99,13 @@
       <!-- Day Outline Card -->
       <div class="card" id="day-outline-card">
         <div class="card-header">
-          <div class="card-title">今日概要</div>
+          <div class="card-title" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span id="day-outline-title">今日概要</span>
+            <button type="button" id="day-location-btn" class="location-tag-btn" onclick="openDayLocationModal()" title="設定當天所在地">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              <span id="day-location-text">+ 所在地</span>
+            </button>
+          </div>
           <div class="badge badge-indigo" id="day-num-badge">Day 1</div>
         </div>
         <p class="card-subtitle" id="day-outline-text">抵達東京，辦理入住並在市區周邊走走，為接下來的行程暖身。</p>
@@ -327,6 +333,52 @@
         <button class="btn btn-secondary" style="flex: 1;" onclick="document.getElementById('import-data-textarea').value=''">清除</button>
         <button class="btn btn-primary" style="flex: 2; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);" onclick="importTripCode()">一鍵匯入與覆蓋</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: SET DAY LOCATION (設定當天所在地)
+       ========================================================================== -->
+  <div class="modal-overlay" id="modal-day-location" onclick="closeModalOnOverlay(event, 'modal-day-location')">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 class="modal-title" id="location-modal-title">設定當天所在地</h2>
+        <span class="modal-close" onclick="closeModal('modal-day-location')">&times;</span>
+      </div>
+      
+      <form id="form-day-location" onsubmit="saveDayLocation(event)">
+        <div class="form-group">
+          <label class="form-label" for="location-modal-day-select">選擇天數</label>
+          <select class="form-select" id="location-modal-day-select" onchange="switchLocationModalDay(this.value)">
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" id="location-modal-day-label">所在地城市 / 地區</label>
+          <input type="text" class="form-input" id="input-day-location" placeholder="例如：東京、京都、富士五湖..." autocomplete="off">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">快速點選熱門城市</label>
+          <div class="checkbox-group" id="quick-locations">
+            <span class="checkbox-pill" onclick="setQuickLocation('東京')">東京</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('京都')">京都</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('大阪')">大阪</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('箱根')">箱根</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('富士山')">富士山</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('輕井澤')">輕井澤</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('札幌')">札幌</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('沖繩')">沖繩</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('福岡')">福岡</span>
+            <span class="checkbox-pill" onclick="setQuickLocation('名古屋')">名古屋</span>
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button type="button" class="btn btn-secondary" onclick="clearDayLocation()">清除所在地</button>
+          <button type="submit" class="btn btn-primary">儲存設定</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -600,7 +652,7 @@
   </div>
 
   <!-- JS Logic Application -->
-  <script src="app.js?v=45"></script>
+  <script src="app.js?v=46"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>

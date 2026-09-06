@@ -511,11 +511,133 @@ function setMemberFilter(memberId) {
 /**
  * 渲染行程分頁內容
  */
+/**
+ * 獲取星期幾字串
+ */
+function getDayOfWeek(dateStr) {
+  if (!dateStr) return "";
+  const days = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+  const d = new Date(dateStr + "T00:00:00");
+  return isNaN(d.getDay()) ? "" : days[d.getDay()];
+}
+
+let editingLocationDay = null;
+
+function openDayLocationModal(targetDay) {
+  editingLocationDay = parseInt(targetDay) || (state.activeDay === 'all' ? 1 : parseInt(state.activeDay) || 1);
+  const dayObj = state.days.find(d => d.day === editingLocationDay);
+  if (!dayObj) return;
+
+  const titleEl = document.getElementById("location-modal-title");
+  if (titleEl) titleEl.innerText = `設定 Day ${dayObj.day} (${dayObj.date ? dayObj.date.substring(5) : ""}) 所在地`;
+
+  const labelEl = document.getElementById("location-modal-day-label");
+  if (labelEl) labelEl.innerText = `Day ${dayObj.day} 所在地城市 / 地區`;
+
+  const daySelect = document.getElementById("location-modal-day-select");
+  if (daySelect) {
+    daySelect.innerHTML = state.days.map(d => `
+      <option value="${d.day}" ${d.day === editingLocationDay ? "selected" : ""}>
+        Day ${d.day} (${d.date ? d.date.substring(5) : ""}) ${d.location ? "· " + d.location : ""}
+      </option>
+    `).join("");
+  }
+
+  const inputEl = document.getElementById("input-day-location");
+  if (inputEl) {
+    inputEl.value = dayObj.location || "";
+    setTimeout(() => inputEl.focus(), 150);
+  }
+  openModal("modal-day-location");
+}
+
+function switchLocationModalDay(newDay) {
+  editingLocationDay = parseInt(newDay);
+  const dayObj = state.days.find(d => d.day === editingLocationDay);
+  if (!dayObj) return;
+
+  const titleEl = document.getElementById("location-modal-title");
+  if (titleEl) titleEl.innerText = `設定 Day ${dayObj.day} (${dayObj.date ? dayObj.date.substring(5) : ""}) 所在地`;
+
+  const labelEl = document.getElementById("location-modal-day-label");
+  if (labelEl) labelEl.innerText = `Day ${dayObj.day} 所在地城市 / 地區`;
+
+  const inputEl = document.getElementById("input-day-location");
+  if (inputEl) {
+    inputEl.value = dayObj.location || "";
+    inputEl.focus();
+  }
+}
+
+function setQuickLocation(city) {
+  const inputEl = document.getElementById("input-day-location");
+  if (inputEl) {
+    inputEl.value = city;
+  }
+}
+
+function saveDayLocation(e) {
+  if (e) e.preventDefault();
+  const daySelect = document.getElementById("location-modal-day-select");
+  const targetDay = daySelect ? parseInt(daySelect.value) : editingLocationDay;
+  const inputEl = document.getElementById("input-day-location");
+  const val = inputEl ? inputEl.value.trim() : "";
+  
+  const dayObj = state.days.find(d => d.day === targetDay);
+  if (dayObj) {
+    if (val) {
+      dayObj.location = val;
+    } else {
+      delete dayObj.location;
+    }
+    saveToLocalStorage();
+    broadcastState();
+    updateModalSelectDropdowns();
+    renderItineraryTab();
+  }
+  closeModal("modal-day-location");
+}
+
+function clearDayLocation() {
+  const daySelect = document.getElementById("location-modal-day-select");
+  const targetDay = daySelect ? parseInt(daySelect.value) : editingLocationDay;
+  const dayObj = state.days.find(d => d.day === targetDay);
+  if (dayObj) {
+    delete dayObj.location;
+    saveToLocalStorage();
+    broadcastState();
+    updateModalSelectDropdowns();
+    renderItineraryTab();
+  }
+  closeModal("modal-day-location");
+}
+
+function openEventModalWithDay(day) {
+  openEventModal();
+  const daySelect = document.getElementById("event-day");
+  if (daySelect) daySelect.value = day;
+}
+
+/**
+ * 渲染行程分頁內容
+ */
 function renderItineraryTab() {
+  const isAll = state.activeDay === 'all';
+
   // 1. 渲染天數選擇 Slider
   const daysTabContainer = document.getElementById("itinerary-days-tabs");
   daysTabContainer.innerHTML = "";
   
+  // 「全程」按鈕 (置於 Day 1 左邊，同風格)
+  const allBtn = document.createElement("button");
+  allBtn.className = `day-btn ${isAll ? "active" : ""}`;
+  allBtn.setAttribute("onclick", `setItineraryActiveDay('all')`);
+  allBtn.innerHTML = `
+    <span class="day-btn-num">全程</span>
+    <span class="day-btn-title">總覽</span>
+  `;
+  daysTabContainer.appendChild(allBtn);
+
   state.days.forEach(d => {
     const btn = document.createElement("button");
     btn.className = `day-btn ${state.activeDay === d.day ? "active" : ""}`;
@@ -528,135 +650,317 @@ function renderItineraryTab() {
   });
   
   // 2. 更新今日概要資訊
-  const currentDayInfo = state.days.find(d => d.day === state.activeDay) || state.days[0];
-  document.getElementById("day-num-badge").innerText = `Day ${currentDayInfo.day}`;
-  document.getElementById("day-outline-text").innerText = currentDayInfo.desc;
-  
-  // 2.5. 動態渲染今日住宿概要詳情
-  const activeDay = state.activeDay;
-  const todayLodging = state.accommodations.find(acc => activeDay >= acc.checkin && activeDay < acc.checkout);
+  const outlineTitleEl = document.getElementById("day-outline-title");
+  const outlineBadgeEl = document.getElementById("day-num-badge");
+  const outlineTextEl = document.getElementById("day-outline-text");
   const lodgingSubcard = document.getElementById("day-lodging-subcard");
-  
-  if (lodgingSubcard) {
-    if (todayLodging) {
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(todayLodging.name + " " + todayLodging.address)}`;
-      const emailHtml = todayLodging.email ? `<p class="lodging-sub-info"><strong>電郵：</strong><a href="mailto:${todayLodging.email}">${todayLodging.email}</a></p>` : '';
-      const phoneHtml = todayLodging.phone ? `<p class="lodging-sub-info"><strong>電話：</strong><a href="tel:${todayLodging.phone}">${todayLodging.phone}</a></p>` : '';
-      const imageHtml = todayLodging.image ? `
-        <div class="lodging-sub-img-wrap">
-          <img src="${todayLodging.image}" alt="${todayLodging.name}" class="lodging-sub-img">
-        </div>
-      ` : '';
+  const locationBtn = document.getElementById("day-location-btn");
+  const locationText = document.getElementById("day-location-text");
 
-      lodgingSubcard.innerHTML = `
-        <div class="lodging-sub-card-inner">
-          <div class="lodging-sub-title">今晚入住飯店</div>
-          <div class="lodging-sub-name">${todayLodging.name}</div>
-          <p class="lodging-sub-info"><strong>地址：</strong><a href="${mapsUrl}" target="_blank" rel="noopener" class="lodging-address-link">${todayLodging.address} (導航)</a></p>
-          ${phoneHtml}
-          ${emailHtml}
-          ${imageHtml}
-        </div>
-      `;
-      lodgingSubcard.style.display = "block";
-    } else {
-      lodgingSubcard.innerHTML = `
-        <div class="lodging-sub-card-inner empty">
-          <p class="lodging-sub-info" style="color: var(--text-muted); font-size: 12px; margin: 0; text-align: center;">今日無入住行程或已辦理退房返國。</p>
-        </div>
-      `;
-      lodgingSubcard.style.display = "block";
+  if (isAll) {
+    if (outlineTitleEl) outlineTitleEl.innerText = "旅途總覽";
+    if (outlineBadgeEl) outlineBadgeEl.innerText = `全程 ${state.days.length} 天`;
+    
+    // 全程足跡地點彙整
+    const allLocations = state.days.map(d => d.location).filter(Boolean);
+    const uniqueLocations = [...new Set(allLocations)];
+    if (locationBtn && locationText) {
+      locationBtn.style.display = "inline-flex";
+      if (uniqueLocations.length > 0) {
+        locationBtn.className = "location-tag-btn has-location";
+        locationText.innerText = uniqueLocations.join(" → ");
+        locationBtn.title = "全程走訪城市足跡";
+      } else {
+        locationBtn.className = "location-tag-btn";
+        locationText.innerText = "設所在地";
+        locationBtn.title = "點擊依天數設定所在地";
+      }
+    }
+    
+    if (outlineTextEl) {
+      const totalEvents = state.itinerary.length;
+      const totalAcc = state.accommodations.length;
+      outlineTextEl.innerText = `整段旅途共 ${state.days.length} 天，包含 ${totalEvents} 個排定日程、${totalAcc} 間住宿安排。下方為完整旅程流水時間軸：`;
+    }
+    
+    if (lodgingSubcard) {
+      lodgingSubcard.style.display = "none";
+    }
+  } else {
+    // 單日視圖
+    const currentDayInfo = state.days.find(d => d.day === state.activeDay) || state.days[0];
+    if (outlineTitleEl) outlineTitleEl.innerText = "今日概要";
+    if (outlineBadgeEl) outlineBadgeEl.innerText = `Day ${currentDayInfo.day}`;
+    if (outlineTextEl) outlineTextEl.innerText = currentDayInfo.desc || "自由活動";
+    
+    if (locationBtn && locationText) {
+      locationBtn.style.display = "inline-flex";
+      if (currentDayInfo.location) {
+        locationBtn.className = "location-tag-btn has-location";
+        locationText.innerText = currentDayInfo.location;
+        locationBtn.title = "點擊修改當天所在地";
+      } else {
+        locationBtn.className = "location-tag-btn";
+        locationText.innerText = "+ 所在地";
+        locationBtn.title = "點擊設定當天所在地";
+      }
+    }
+    
+    // 2.5. 動態渲染今日住宿概要詳情
+    const activeDay = state.activeDay;
+    const todayLodging = state.accommodations.find(acc => activeDay >= acc.checkin && activeDay < acc.checkout);
+    
+    if (lodgingSubcard) {
+      if (todayLodging) {
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(todayLodging.name + " " + todayLodging.address)}`;
+        const emailHtml = todayLodging.email ? `<p class="lodging-sub-info"><strong>電郵：</strong><a href="mailto:${todayLodging.email}">${todayLodging.email}</a></p>` : '';
+        const phoneHtml = todayLodging.phone ? `<p class="lodging-sub-info"><strong>電話：</strong><a href="tel:${todayLodging.phone}">${todayLodging.phone}</a></p>` : '';
+        const imageHtml = todayLodging.image ? `
+          <div class="lodging-sub-img-wrap">
+            <img src="${todayLodging.image}" alt="${todayLodging.name}" class="lodging-sub-img">
+          </div>
+        ` : '';
+
+        lodgingSubcard.innerHTML = `
+          <div class="lodging-sub-card-inner">
+            <div class="lodging-sub-title">今晚入住飯店</div>
+            <div class="lodging-sub-name">${todayLodging.name}</div>
+            <p class="lodging-sub-info"><strong>地址：</strong><a href="${mapsUrl}" target="_blank" rel="noopener" class="lodging-address-link">${todayLodging.address} (導航)</a></p>
+            ${phoneHtml}
+            ${emailHtml}
+            ${imageHtml}
+          </div>
+        `;
+        lodgingSubcard.style.display = "block";
+      } else {
+        lodgingSubcard.innerHTML = `
+          <div class="lodging-sub-card-inner empty">
+            <p class="lodging-sub-info" style="color: var(--text-muted); font-size: 12px; margin: 0; text-align: center;">今日無入住行程或已辦理退房返國。</p>
+          </div>
+        `;
+        lodgingSubcard.style.display = "block";
+      }
     }
   }
-  
-  // 3. 篩選與渲染今日日程時間軸
+
+  // 3. 篩選與渲染日程時間軸 / 全程流水
   const timelineContainer = document.getElementById("timeline-container");
   timelineContainer.innerHTML = "";
-  
-  // 篩選屬於 activeDay 且參與成員符合 filterMember 的事件
-  const filteredEvents = state.itinerary
-    .filter(event => event.day === state.activeDay)
-    .filter(event => {
-      if (state.filterMember === "all") return true;
-      return event.members.includes(state.filterMember);
-    })
-    // 依時間排序
-    .sort((a, b) => {
-      // 處理舊格式與新格式
-      const aAllDay = a.allDay || false;
-      const bAllDay = b.allDay || false;
-      if (aAllDay && !bAllDay) return -1; // 整天排前面
-      if (!aAllDay && bAllDay) return 1;
+
+  if (isAll) {
+    // === 全程旅程流水 (STREAM VIEW) ===
+    state.days.forEach(d => {
+      const dayGroup = document.createElement("div");
+      dayGroup.className = "stream-day-group";
       
-      const aTime = a.startTime || a.time || "";
-      const bTime = b.startTime || b.time || "";
-      return aTime.localeCompare(bTime);
-    });
-    
-  if (filteredEvents.length === 0) {
-    timelineContainer.innerHTML = `
-      <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px;">
-        今日無符合此家人的排程日程。<br>點擊右下角「＋」按鈕為他新增一個吧！
-      </div>
-    `;
-    return;
-  }
-  
-  filteredEvents.forEach((event, index) => {
-    const timelineItem = document.createElement("div");
-    // 如果是今日第一個或是接近目前時間的，加 active 樣式
-    timelineItem.className = `timeline-item ${index === 0 ? "active" : ""}`;
-    
+      const dayDateStr = d.date ? `${d.date.substring(5)} (${getDayOfWeek(d.date)})` : "";
+      const locBtnHtml = d.location 
+        ? `<button type="button" class="location-tag-btn has-location" onclick="openDayLocationModal(${d.day})" title="點擊修改所在地"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>${d.location}</button>`
+        : `<button type="button" class="location-tag-btn" onclick="openDayLocationModal(${d.day})" title="點擊設定所在地"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>+ 所在地</button>`;
 
+      let dayHtml = `
+        <div class="stream-day-header">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="badge badge-indigo" style="font-size: 11.5px; padding: 3px 8px; cursor: pointer;" onclick="setItineraryActiveDay(${d.day})">Day ${d.day}</span>
+            <span class="stream-day-date" style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);">${dayDateStr}</span>
+            ${locBtnHtml}
+          </div>
+          <button type="button" class="btn-secondary" style="padding: 3px 9px; font-size: 11px; border-radius: 8px; cursor: pointer;" onclick="setItineraryActiveDay(${d.day})" title="切換至單日詳細">查看單日</button>
+        </div>
+        ${d.desc && d.desc !== "自由活動" ? `<div style="font-size: 12px; color: var(--text-secondary); margin: -4px 0 10px 4px;">${d.desc}</div>` : ""}
+      `;
 
-    // 建立參與成員頭像群組 HTML
-    let membersAvatarsHTML = "";
-    event.members.forEach(mId => {
-      const m = state.members[mId];
-      if (m) {
-        const textColor = getContrastColor(m.color);
-        membersAvatarsHTML += `
-          <div class="avatar-circle" style="background: ${m.color}; color: ${textColor};" title="${m.name}">
-            ${m.name.substring(0, 1)}
+      // 該日住宿 (標出住宿)
+      const dayLodging = state.accommodations.find(acc => d.day >= acc.checkin && d.day < acc.checkout);
+      if (dayLodging) {
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dayLodging.name + ' ' + dayLodging.address)}`;
+        dayHtml += `
+          <div class="stream-entry" style="margin-bottom: 8px;">
+            <div class="card timeline-card" style="border-left: 3px solid var(--accent-purple); padding: 10px 12px; margin-bottom: 6px; background: var(--bg-subtle);">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div style="margin-bottom: 2px;">
+                    <span class="badge badge-indigo" style="font-size: 9.5px; padding: 2px 6px;">住宿</span>
+                    <span style="font-size: 11px; color: var(--accent-purple); font-weight: 600; margin-left: 4px;">今晚入住</span>
+                  </div>
+                  <div style="font-weight: 600; font-size: 13px; color: var(--text-primary);">${dayLodging.name}</div>
+                </div>
+                ${dayLodging.address ? `
+                  <a href="${mapsUrl}" target="_blank" rel="noopener" class="lodging-address-link" style="font-size: 11px; white-space: nowrap;">導航 ↗</a>
+                ` : ""}
+              </div>
+              ${dayLodging.address ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${dayLodging.address}</div>` : ""}
+            </div>
           </div>
         `;
       }
-    });
-    
-    // 設定日程類別 Emoji
-    let categoryBadgeHTML = "";
-    if (event.category === "flight") categoryBadgeHTML = `<span class="badge badge-cyan">交通</span>`;
-    else if (event.category === "hotel") categoryBadgeHTML = `<span class="badge badge-indigo">住宿</span>`;
-    else if (event.category === "dining") categoryBadgeHTML = `<span class="badge badge-orange">餐飲</span>`;
-    else if (event.category === "shopping") categoryBadgeHTML = `<span class="badge badge-pink">購物</span>`;
-    else categoryBadgeHTML = `<span class="badge badge-green">景點</span>`;
 
-    timelineItem.innerHTML = `
-      <div class="timeline-marker"></div>
-      <div class="timeline-item-time">${event.allDay ? "[整天]" : (event.startTime ? event.startTime + " - " + event.endTime : event.time)} ${categoryBadgeHTML}</div>
-      <div class="card timeline-card">
-        <div class="card-header" style="margin-bottom: 4px;">
-          <div class="attraction-title" style="font-size: 14px;">${event.title}</div>
-          <div style="display: flex; gap: 8px;">
-            <span style="cursor:pointer; display: inline-flex; align-items: center; color: var(--text-secondary);" onclick="editItineraryEvent('${event.id}')" title="編輯">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
-            </span>
-            <span style="cursor:pointer; display: inline-flex; align-items: center; color: var(--accent-red); margin-left: 2px;" onclick="deleteItineraryEvent('${event.id}')" title="刪除">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </span>
+      // 該日行程與交通 (標出行程、交通)
+      const dayEvents = state.itinerary
+        .filter(event => event.day === d.day)
+        .filter(event => state.filterMember === "all" || event.members.includes(state.filterMember))
+        .sort((a, b) => {
+          const aAllDay = a.allDay || false;
+          const bAllDay = b.allDay || false;
+          if (aAllDay && !bAllDay) return -1;
+          if (!aAllDay && bAllDay) return 1;
+          const aTime = a.startTime || a.time || "";
+          const bTime = b.startTime || b.time || "";
+          return aTime.localeCompare(bTime);
+        });
+
+      if (dayEvents.length > 0) {
+        dayEvents.forEach(event => {
+          let membersAvatarsHTML = "";
+          (event.members || []).forEach(mId => {
+            const m = state.members[mId];
+            if (m) {
+              const textColor = getContrastColor(m.color);
+              membersAvatarsHTML += `
+                <div class="avatar-circle" style="background: ${m.color}; color: ${textColor}; width: 16px; height: 16px; font-size: 7.5px;" title="${m.name}">
+                  ${m.name.substring(0, 1)}
+                </div>
+              `;
+            }
+          });
+
+          // 分類 Badge：交通、住宿、餐飲、購物、景點
+          let categoryBadgeHTML = "";
+          let borderLeftStyle = "";
+          if (event.category === "flight") {
+            categoryBadgeHTML = `<span class="badge badge-cyan" style="font-weight: 600;">交通</span>`;
+            borderLeftStyle = "border-left: 3px solid var(--accent-cyan);";
+          } else if (event.category === "hotel") {
+            categoryBadgeHTML = `<span class="badge badge-indigo">住宿</span>`;
+            borderLeftStyle = "border-left: 3px solid var(--accent-purple);";
+          } else if (event.category === "dining") {
+            categoryBadgeHTML = `<span class="badge badge-orange">餐飲</span>`;
+          } else if (event.category === "shopping") {
+            categoryBadgeHTML = `<span class="badge badge-pink">購物</span>`;
+          } else {
+            categoryBadgeHTML = `<span class="badge badge-green">景點</span>`;
+          }
+
+          const timeDisplay = event.allDay ? "[整天]" : (event.startTime ? event.startTime + " - " + event.endTime : event.time || "");
+
+          dayHtml += `
+            <div class="stream-entry" style="margin-bottom: 6px;">
+              <div class="card timeline-card" style="${borderLeftStyle} padding: 10px 12px; margin-bottom: 6px;">
+                <div class="card-header" style="margin-bottom: 2px;">
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">${timeDisplay}</span>
+                    ${categoryBadgeHTML}
+                    <span class="attraction-title" style="font-size: 13.5px; font-weight: 600;">${event.title}</span>
+                  </div>
+                  <div style="display: flex; gap: 6px;">
+                    <span style="cursor:pointer; display: inline-flex; align-items: center; color: var(--text-secondary);" onclick="editItineraryEvent('${event.id}')" title="編輯">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+                    </span>
+                    <span style="cursor:pointer; display: inline-flex; align-items: center; color: var(--accent-red); margin-left: 2px;" onclick="deleteItineraryEvent('${event.id}')" title="刪除">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </span>
+                  </div>
+                </div>
+                ${event.notes ? `<p class="attraction-desc" style="margin-bottom: 6px; font-size: 11.5px;">${event.notes}</p>` : ""}
+                <div class="timeline-card-meta" style="margin-top: 4px; padding-top: 4px;">
+                  <span style="font-size: 10px;">參與家人：</span>
+                  <div class="members-avatar-group">
+                    ${membersAvatarsHTML}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+      } else if (!dayLodging) {
+        dayHtml += `
+          <div style="font-size: 11.5px; color: var(--text-muted); padding: 8px 12px; background: rgba(0,0,0,0.02); border-radius: 8px; margin-bottom: 6px;">
+            本日尚未排定活動日程 · <span style="color: var(--primary); cursor:pointer; text-decoration: underline;" onclick="openEventModalWithDay(${d.day})">+ 新增日程</span>
           </div>
+        `;
+      }
+
+      dayHtml += `<div class="stream-day-divider"></div>`;
+      dayGroup.innerHTML = dayHtml;
+      timelineContainer.appendChild(dayGroup);
+    });
+  } else {
+    // 單日日程時間軸渲染
+    const filteredEvents = state.itinerary
+      .filter(event => event.day === state.activeDay)
+      .filter(event => {
+        if (state.filterMember === "all") return true;
+        return event.members.includes(state.filterMember);
+      })
+      .sort((a, b) => {
+        const aAllDay = a.allDay || false;
+        const bAllDay = b.allDay || false;
+        if (aAllDay && !bAllDay) return -1;
+        if (!aAllDay && bAllDay) return 1;
+        const aTime = a.startTime || a.time || "";
+        const bTime = b.startTime || b.time || "";
+        return aTime.localeCompare(bTime);
+      });
+      
+    if (filteredEvents.length === 0) {
+      timelineContainer.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px;">
+          今日無符合此家人的排程日程。<br>點擊右下角「＋」按鈕為他新增一個吧！
         </div>
-        ${event.notes ? `<p class="attraction-desc" style="margin-bottom: 8px; font-size:12px;">${event.notes}</p>` : ""}
-        <div class="timeline-card-meta">
-          <span>參與家人：</span>
-          <div class="members-avatar-group">
-            ${membersAvatarsHTML}
+      `;
+    } else {
+      filteredEvents.forEach((event, index) => {
+        const timelineItem = document.createElement("div");
+        timelineItem.className = `timeline-item ${index === 0 ? "active" : ""}`;
+
+        let membersAvatarsHTML = "";
+        (event.members || []).forEach(mId => {
+          const m = state.members[mId];
+          if (m) {
+            const textColor = getContrastColor(m.color);
+            membersAvatarsHTML += `
+              <div class="avatar-circle" style="background: ${m.color}; color: ${textColor};" title="${m.name}">
+                ${m.name.substring(0, 1)}
+              </div>
+            `;
+          }
+        });
+        
+        let categoryBadgeHTML = "";
+        if (event.category === "flight") categoryBadgeHTML = `<span class="badge badge-cyan">交通</span>`;
+        else if (event.category === "hotel") categoryBadgeHTML = `<span class="badge badge-indigo">住宿</span>`;
+        else if (event.category === "dining") categoryBadgeHTML = `<span class="badge badge-orange">餐飲</span>`;
+        else if (event.category === "shopping") categoryBadgeHTML = `<span class="badge badge-pink">購物</span>`;
+        else categoryBadgeHTML = `<span class="badge badge-green">景點</span>`;
+
+        timelineItem.innerHTML = `
+          <div class="timeline-marker"></div>
+          <div class="timeline-item-time">${event.allDay ? "[整天]" : (event.startTime ? event.startTime + " - " + event.endTime : event.time)} ${categoryBadgeHTML}</div>
+          <div class="card timeline-card">
+            <div class="card-header" style="margin-bottom: 4px;">
+              <div class="attraction-title" style="font-size: 14px;">${event.title}</div>
+              <div style="display: flex; gap: 8px;">
+                <span style="cursor:pointer; display: inline-flex; align-items: center; color: var(--text-secondary);" onclick="editItineraryEvent('${event.id}')" title="編輯">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+                </span>
+                <span style="cursor:pointer; display: inline-flex; align-items: center; color: var(--accent-red); margin-left: 2px;" onclick="deleteItineraryEvent('${event.id}')" title="刪除">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </span>
+              </div>
+            </div>
+            ${event.notes ? `<p class="attraction-desc" style="margin-bottom: 8px; font-size:12px;">${event.notes}</p>` : ""}
+            <div class="timeline-card-meta">
+              <span>參與家人：</span>
+              <div class="members-avatar-group">
+                ${membersAvatarsHTML}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    `;
-    timelineContainer.appendChild(timelineItem);
-  });
+        `;
+        timelineContainer.appendChild(timelineItem);
+      });
+    }
+  }
   
   // 渲染景點推薦卡
   renderAttractions();
@@ -679,8 +983,10 @@ function openEventModal() {
   document.getElementById("event-all-day").checked = false;
   if(typeof toggleEventTimeInputs === 'function') toggleEventTimeInputs();
   
-  // 設定預設天數選項為目前 activeDay
-  document.getElementById("event-day").value = state.activeDay;
+  // 設定預設天數選項為目前 activeDay（若為「全程」則預設為 Day 1）
+  const defaultDay = (state.activeDay === 'all' || !state.activeDay) ? 1 : state.activeDay;
+  const daySelect = document.getElementById("event-day");
+  if (daySelect) daySelect.value = defaultDay;
   
   // 預設全選家庭成員，並同步視覺 Pill
   const checkboxes = document.querySelectorAll(".event-member-checkbox");
