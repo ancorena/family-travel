@@ -536,8 +536,8 @@ function getDayLocationText(dayObj) {
       locs[loc].push(state.members[mId]?.name || mId);
     });
     const locKeys = Object.keys(locs);
-    if (locKeys.length === 1) {
-      return locKeys[0]; // All members have the same location
+    if (locKeys.length === 1 && locs[locKeys[0]].length === Object.keys(state.members).length) {
+      return locKeys[0]; // All members have the SAME location AND all members are present
     }
     return locKeys.map(loc => `${loc} (${locs[loc].join("、")})`).join("、");
   }
@@ -577,14 +577,13 @@ function openDayLocationModal(targetDay) {
   const labelEl = document.getElementById("location-modal-day-label");
   if (labelEl) labelEl.innerText = `所在地城市 / 地區`;
 
-  const memberCheckboxes = document.getElementById("location-modal-member-checkboxes");
-  if (memberCheckboxes) {
-    memberCheckboxes.innerHTML = Object.keys(state.members).map(mId => {
+  const memberCheckboxesContainer = document.getElementById("location-modal-member-checkboxes");
+  if (memberCheckboxesContainer) {
+    memberCheckboxesContainer.innerHTML = Object.keys(state.members).map(mId => {
       const member = state.members[mId];
-      // Default to checked (all members)
       return `
         <label class="checkbox-pill active" style="cursor: pointer; user-select: none; border-color:${member.color}">
-          <input type="checkbox" class="location-member-checkbox" value="${mId}" checked style="display: none;" onchange="this.parentElement.classList.toggle('active', this.checked)">
+          <input type="checkbox" class="location-member-checkbox" value="${mId}" checked style="display: none;" onchange="this.parentElement.classList.toggle('active', this.checked); syncLocationInputWithMembers()">
           ${member.name}
         </label>
       `;
@@ -595,7 +594,7 @@ function openDayLocationModal(targetDay) {
   if (dayCheckboxes) {
     dayCheckboxes.innerHTML = state.days.map(d => `
       <label class="checkbox-pill ${d.day === initialDay ? 'active' : ''}" style="cursor: pointer; user-select: none;">
-        <input type="checkbox" value="${d.day}" ${d.day === initialDay ? "checked" : ""} style="display: none;" onchange="this.parentElement.classList.toggle('active', this.checked)">
+        <input type="checkbox" value="${d.day}" ${d.day === initialDay ? "checked" : ""} style="display: none;" onchange="this.parentElement.classList.toggle('active', this.checked); syncLocationInputWithMembers()">
         Day ${d.day} ${d.date ? '(' + d.date.substring(5) + ')' : ''} ${getDayLocationText(d) ? '· ' + getDayLocationText(d) : ''}
       </label>
     `).join("");
@@ -603,17 +602,52 @@ function openDayLocationModal(targetDay) {
 
   const inputEl = document.getElementById("input-day-location");
   if (inputEl) {
-    // Determine initial input value based on dayObj
-    let initialValue = dayObj.location || "";
-    if (dayObj.memberLocations && Object.keys(dayObj.memberLocations).length > 0) {
-      initialValue = ""; // If split, start blank so they don't accidentally overwrite all with one member's location unless they type
-    }
-    inputEl.value = initialValue;
     renderQuickLocationPills();
     syncQuickLocationPills();
     setTimeout(() => inputEl.focus(), 150);
   }
+  
+  // Call it once to initialize based on selection
+  syncLocationInputWithMembers();
   openModal("modal-day-location");
+}
+
+function syncLocationInputWithMembers() {
+  const dayCheckboxes = Array.from(document.querySelectorAll('#location-modal-day-checkboxes input:checked'));
+  const memberCheckboxes = Array.from(document.querySelectorAll('.location-member-checkbox:checked'));
+  const inputEl = document.getElementById("input-day-location");
+  
+  if (!inputEl || dayCheckboxes.length === 0 || memberCheckboxes.length === 0) {
+    if (inputEl) inputEl.value = "";
+    return;
+  }
+
+  // Only sync from the FIRST checked day to avoid confusion
+  const firstDayNum = parseInt(dayCheckboxes[0].value, 10);
+  const dayObj = state.days.find(d => d.day === firstDayNum);
+  if (!dayObj) return;
+
+  let commonLoc = null;
+  let allSame = true;
+
+  if (dayObj.memberLocations && Object.keys(dayObj.memberLocations).length > 0) {
+    for (let i = 0; i < memberCheckboxes.length; i++) {
+      const mId = memberCheckboxes[i].value;
+      const loc = dayObj.memberLocations[mId] || "";
+      if (i === 0) {
+        commonLoc = loc;
+      } else if (commonLoc !== loc) {
+        allSame = false;
+        break;
+      }
+    }
+    inputEl.value = allSame ? commonLoc : "(保留目前各自分開的設定)";
+  } else {
+    // Fallback to global location
+    inputEl.value = dayObj.location || "";
+  }
+  
+  syncQuickLocationPills();
 }
 
 /**
@@ -652,7 +686,7 @@ function renderQuickLocationPills() {
 
 function syncQuickLocationPills() {
   const inputEl = document.getElementById("input-day-location");
-  const current = inputEl ? inputEl.value.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean) : [];
+  const current = inputEl ? inputEl.value.split(/[、,，\/\s]+/).map(s => s.trim()).filter(Boolean) : [];
   const pills = document.querySelectorAll("#trip-used-locations .checkbox-pill, #quick-locations .checkbox-pill");
   pills.forEach(pill => {
     const city = pill.getAttribute("data-city") || pill.innerText.trim();
@@ -669,7 +703,7 @@ function syncQuickLocationPills() {
 function toggleQuickLocation(city) {
   const inputEl = document.getElementById("input-day-location");
   if (!inputEl) return;
-  let current = inputEl.value.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
+  let current = inputEl.value.split(/[、,，\/\s]+/).map(s => s.trim()).filter(Boolean);
   const idx = current.indexOf(city);
   if (idx > -1) {
     current.splice(idx, 1);
@@ -700,8 +734,14 @@ function saveDayLocation(e) {
   
   const inputEl = document.getElementById("input-day-location");
   const rawVal = inputEl ? inputEl.value.trim() : "";
-  const joinedLocs = rawVal ? rawVal.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean).join("、") : "";
   
+  if (rawVal === "(保留目前各自分開的設定)") {
+    // 使用者沒有修改，直接關閉
+    closeModal("modal-day-location");
+    return;
+  }
+  
+  const joinedLocs = rawVal ? rawVal.split(/[、,，\/\s]+/).map(s => s.trim()).filter(Boolean).join("、") : "";
   targetDays.forEach(day => {
     const dayObj = state.days.find(d => d.day === day);
     if (dayObj) {
