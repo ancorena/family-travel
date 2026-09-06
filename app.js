@@ -1,5 +1,5 @@
 /**
- * 家族旅行小幫手 (Family Travel Co-planner) - Core Application Logic
+ * 抱團 (Family Travel Co-planner) - Core Application Logic
  * 
  * 包含功能：
  * 1. 響應式單頁應用 (SPA) 路由控制
@@ -3041,7 +3041,7 @@ function importTripCode() {
     
     // 基本結構檢核
     if (!importedState.tripName || !importedState.members || !importedState.itinerary) {
-      alert("格式不正確！請確認此代碼為「家族旅行小幫手」匯出的旅行代碼。");
+      alert("格式不正確！請確認此代碼為「抱團」匯出的旅行代碼。");
       return;
     }
     
