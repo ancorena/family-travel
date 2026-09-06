@@ -690,6 +690,9 @@ body {
   transition: all 0.2s ease;
   line-height: 1.5;
   outline: none;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 .location-tag-btn:hover {
@@ -1566,10 +1569,12 @@ body {
   transition: all 0.2s ease;
 }
 
-.checkbox-pill.selected {
-  background: rgba(148, 168, 189, 0.2);
+.checkbox-pill.selected,
+.checkbox-pill.active {
+  background: rgba(148, 168, 189, 0.25);
   border-color: var(--primary);
-  color: #3b5066;
+  color: #314a60;
+  font-weight: 600;
 }
 
 .btn-group {

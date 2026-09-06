@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="app-icon.jpg?v=2">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="app.css?v=47">
+  <link rel="stylesheet" href="app.css?v=48">
 <script type="module">
   import * as nostrTools from "https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm";
   window.nostrTools = nostrTools;
@@ -367,22 +367,27 @@
 
         <div class="form-group">
           <label class="form-label" id="location-modal-day-label">所在地城市 / 地區</label>
-          <input type="text" class="form-input" id="input-day-location" placeholder="例如：東京、京都、富士五湖..." autocomplete="off">
+          <input type="text" class="form-input" id="input-day-location" placeholder="例如：東京、箱根（可輸入多個，以頓號或逗號隔開）" oninput="syncQuickLocationPills()" autocomplete="off">
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">支援單日輸入多個地點（如跨城市移動日：東京、箱根）</p>
         </div>
         
         <div class="form-group">
-          <label class="form-label">快速點選熱門城市</label>
+          <label class="form-label">快速點選熱門城市（可複選多個）</label>
           <div class="checkbox-group" id="quick-locations">
-            <span class="checkbox-pill" onclick="setQuickLocation('東京')">東京</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('京都')">京都</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('大阪')">大阪</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('箱根')">箱根</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('富士山')">富士山</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('輕井澤')">輕井澤</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('札幌')">札幌</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('沖繩')">沖繩</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('福岡')">福岡</span>
-            <span class="checkbox-pill" onclick="setQuickLocation('名古屋')">名古屋</span>
+            <span class="checkbox-pill" data-city="東京" onclick="toggleQuickLocation('東京')">東京</span>
+            <span class="checkbox-pill" data-city="京都" onclick="toggleQuickLocation('京都')">京都</span>
+            <span class="checkbox-pill" data-city="大阪" onclick="toggleQuickLocation('大阪')">大阪</span>
+            <span class="checkbox-pill" data-city="箱根" onclick="toggleQuickLocation('箱根')">箱根</span>
+            <span class="checkbox-pill" data-city="富士山" onclick="toggleQuickLocation('富士山')">富士山</span>
+            <span class="checkbox-pill" data-city="輕井澤" onclick="toggleQuickLocation('輕井澤')">輕井澤</span>
+            <span class="checkbox-pill" data-city="橫濱" onclick="toggleQuickLocation('橫濱')">橫濱</span>
+            <span class="checkbox-pill" data-city="鎌倉" onclick="toggleQuickLocation('鎌倉')">鎌倉</span>
+            <span class="checkbox-pill" data-city="奈良" onclick="toggleQuickLocation('奈良')">奈良</span>
+            <span class="checkbox-pill" data-city="神戶" onclick="toggleQuickLocation('神戶')">神戶</span>
+            <span class="checkbox-pill" data-city="札幌" onclick="toggleQuickLocation('札幌')">札幌</span>
+            <span class="checkbox-pill" data-city="沖繩" onclick="toggleQuickLocation('沖繩')">沖繩</span>
+            <span class="checkbox-pill" data-city="福岡" onclick="toggleQuickLocation('福岡')">福岡</span>
+            <span class="checkbox-pill" data-city="名古屋" onclick="toggleQuickLocation('名古屋')">名古屋</span>
           </div>
         </div>
 
@@ -664,7 +669,7 @@
   </div>
 
   <!-- JS Logic Application -->
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=48"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>

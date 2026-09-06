@@ -548,6 +548,7 @@ function openDayLocationModal(targetDay) {
   const inputEl = document.getElementById("input-day-location");
   if (inputEl) {
     inputEl.value = dayObj.location || "";
+    syncQuickLocationPills();
     setTimeout(() => inputEl.focus(), 150);
   }
   openModal("modal-day-location");
@@ -567,15 +568,43 @@ function switchLocationModalDay(newDay) {
   const inputEl = document.getElementById("input-day-location");
   if (inputEl) {
     inputEl.value = dayObj.location || "";
+    syncQuickLocationPills();
     inputEl.focus();
   }
 }
 
-function setQuickLocation(city) {
+function syncQuickLocationPills() {
   const inputEl = document.getElementById("input-day-location");
-  if (inputEl) {
-    inputEl.value = city;
+  const current = inputEl ? inputEl.value.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean) : [];
+  const pills = document.querySelectorAll("#quick-locations .checkbox-pill");
+  pills.forEach(pill => {
+    const city = pill.getAttribute("data-city") || pill.innerText.trim();
+    if (current.includes(city)) {
+      pill.classList.add("active");
+      pill.classList.add("selected");
+    } else {
+      pill.classList.remove("active");
+      pill.classList.remove("selected");
+    }
+  });
+}
+
+function toggleQuickLocation(city) {
+  const inputEl = document.getElementById("input-day-location");
+  if (!inputEl) return;
+  let current = inputEl.value.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
+  const idx = current.indexOf(city);
+  if (idx > -1) {
+    current.splice(idx, 1);
+  } else {
+    current.push(city);
   }
+  inputEl.value = current.join("、");
+  syncQuickLocationPills();
+}
+
+function setQuickLocation(city) {
+  toggleQuickLocation(city);
 }
 
 function saveDayLocation(e) {
@@ -583,17 +612,17 @@ function saveDayLocation(e) {
   const daySelect = document.getElementById("location-modal-day-select");
   const targetDay = daySelect ? parseInt(daySelect.value) : editingLocationDay;
   const inputEl = document.getElementById("input-day-location");
-  const val = inputEl ? inputEl.value.trim() : "";
+  const rawVal = inputEl ? inputEl.value.trim() : "";
   
   const dayObj = state.days.find(d => d.day === targetDay);
   if (dayObj) {
-    if (val) {
-      dayObj.location = val;
+    if (rawVal) {
+      const locs = rawVal.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
+      dayObj.location = locs.join("、");
     } else {
       delete dayObj.location;
     }
     saveToLocalStorage();
-    broadcastState();
     updateModalSelectDropdowns();
     renderItineraryTab();
   }
@@ -607,7 +636,6 @@ function clearDayLocation() {
   if (dayObj) {
     delete dayObj.location;
     saveToLocalStorage();
-    broadcastState();
     updateModalSelectDropdowns();
     renderItineraryTab();
   }
@@ -1100,9 +1128,19 @@ function renderItineraryTab() {
     if (outlineTitleEl) outlineTitleEl.innerText = "旅途總覽";
     if (outlineBadgeEl) outlineBadgeEl.innerText = `全程 ${state.days.length} 天`;
     
-    // 全程足跡地點彙整
-    const allLocations = state.days.map(d => d.location).filter(Boolean);
-    const uniqueLocations = [...new Set(allLocations)];
+    // 全程足跡地點彙整（支援單日多個地點切分）
+    const allLocations = [];
+    state.days.forEach(d => {
+      if (d.location) {
+        const parts = d.location.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+          if (!allLocations.includes(p)) {
+            allLocations.push(p);
+          }
+        });
+      }
+    });
+    const uniqueLocations = allLocations;
     if (locationBtn && locationText) {
       locationBtn.style.display = "inline-flex";
       if (uniqueLocations.length > 0) {
