@@ -523,6 +523,46 @@ function getDayOfWeek(dateStr) {
   return isNaN(d.getDay()) ? "" : days[d.getDay()];
 }
 
+/**
+ * 取得該天的所在地顯示字串 (支援分開各人行程)
+ */
+function getDayLocationText(dayObj) {
+  if (!dayObj) return "";
+  if (dayObj.memberLocations && Object.keys(dayObj.memberLocations).length > 0) {
+    const locs = {};
+    Object.keys(dayObj.memberLocations).forEach(mId => {
+      const loc = dayObj.memberLocations[mId];
+      if (!locs[loc]) locs[loc] = [];
+      locs[loc].push(state.members[mId]?.name || mId);
+    });
+    const locKeys = Object.keys(locs);
+    if (locKeys.length === 1) {
+      return locKeys[0]; // All members have the same location
+    }
+    return locKeys.map(loc => `${loc} (${locs[loc].join("、")})`).join("、");
+  }
+  return dayObj.location || "";
+}
+
+/**
+ * 取得行程中出現過的所有城市清單
+ */
+function getAllTripLocations() {
+  const tripCitiesSet = new Set();
+  (state.days || []).forEach(d => {
+    const rawLocs = [];
+    if (d.location) rawLocs.push(d.location);
+    if (d.memberLocations) {
+      Object.values(d.memberLocations).forEach(loc => rawLocs.push(loc));
+    }
+    rawLocs.forEach(raw => {
+      const parts = raw.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean);
+      parts.forEach(p => tripCitiesSet.add(p));
+    });
+  });
+  return Array.from(tripCitiesSet);
+}
+
 let editingLocationDay = null;
 
 function openDayLocationModal(targetDay) {
@@ -537,19 +577,38 @@ function openDayLocationModal(targetDay) {
   const labelEl = document.getElementById("location-modal-day-label");
   if (labelEl) labelEl.innerText = `所在地城市 / 地區`;
 
+  const memberCheckboxes = document.getElementById("location-modal-member-checkboxes");
+  if (memberCheckboxes) {
+    memberCheckboxes.innerHTML = Object.keys(state.members).map(mId => {
+      const member = state.members[mId];
+      // Default to checked (all members)
+      return `
+        <label class="checkbox-pill active" style="cursor: pointer; user-select: none; border-color:${member.color}">
+          <input type="checkbox" class="location-member-checkbox" value="${mId}" checked style="display: none;" onchange="this.parentElement.classList.toggle('active', this.checked)">
+          ${member.name}
+        </label>
+      `;
+    }).join("");
+  }
+
   const dayCheckboxes = document.getElementById("location-modal-day-checkboxes");
   if (dayCheckboxes) {
     dayCheckboxes.innerHTML = state.days.map(d => `
       <label class="checkbox-pill ${d.day === initialDay ? 'active' : ''}" style="cursor: pointer; user-select: none;">
         <input type="checkbox" value="${d.day}" ${d.day === initialDay ? "checked" : ""} style="display: none;" onchange="this.parentElement.classList.toggle('active', this.checked)">
-        Day ${d.day} ${d.date ? '(' + d.date.substring(5) + ')' : ''} ${d.location ? '· ' + d.location : ''}
+        Day ${d.day} ${d.date ? '(' + d.date.substring(5) + ')' : ''} ${getDayLocationText(d) ? '· ' + getDayLocationText(d) : ''}
       </label>
     `).join("");
   }
 
   const inputEl = document.getElementById("input-day-location");
   if (inputEl) {
-    inputEl.value = dayObj.location || "";
+    // Determine initial input value based on dayObj
+    let initialValue = dayObj.location || "";
+    if (dayObj.memberLocations && Object.keys(dayObj.memberLocations).length > 0) {
+      initialValue = ""; // If split, start blank so they don't accidentally overwrite all with one member's location unless they type
+    }
+    inputEl.value = initialValue;
     renderQuickLocationPills();
     syncQuickLocationPills();
     setTimeout(() => inputEl.focus(), 150);
@@ -564,14 +623,7 @@ function renderQuickLocationPills() {
   const defaultCities = ["東京", "京都", "大阪", "箱根", "富士山", "輕井澤", "橫濱", "鎌倉", "奈良", "神戶", "札幌", "沖繩", "福岡", "名古屋"];
   
   // 取得這次旅行曾經輸入過的所有城市
-  const tripCitiesSet = new Set();
-  (state.days || []).forEach(d => {
-    if (d.location) {
-      const parts = d.location.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
-      parts.forEach(p => tripCitiesSet.add(p));
-    }
-  });
-  const tripCities = Array.from(tripCitiesSet);
+  const tripCities = getAllTripLocations();
 
   // 1. 本次旅行已輸入城市專屬區塊
   const tripGroup = document.getElementById("group-trip-locations");
@@ -641,17 +693,61 @@ function saveDayLocation(e) {
     targetDays.push(editingLocationDay);
   }
   
+  const memberCheckboxes = document.querySelectorAll(".location-member-checkbox:checked");
+  const selectedMembers = Array.from(memberCheckboxes).map(cb => cb.value);
+  const totalMembers = Object.keys(state.members).length;
+  const isAllMembers = selectedMembers.length === totalMembers || selectedMembers.length === 0; // If 0, fallback to all
+  
   const inputEl = document.getElementById("input-day-location");
   const rawVal = inputEl ? inputEl.value.trim() : "";
+  const joinedLocs = rawVal ? rawVal.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean).join("、") : "";
   
   targetDays.forEach(day => {
     const dayObj = state.days.find(d => d.day === day);
     if (dayObj) {
-      if (rawVal) {
-        const locs = rawVal.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean);
-        dayObj.location = locs.join("、");
+      if (isAllMembers) {
+        if (joinedLocs) {
+          dayObj.location = joinedLocs;
+        } else {
+          delete dayObj.location;
+        }
+        delete dayObj.memberLocations; // Reset to global
       } else {
-        delete dayObj.location;
+        // Partial members
+        if (!dayObj.memberLocations) {
+          dayObj.memberLocations = {};
+          // Populate others with global location so they aren't lost
+          if (dayObj.location) {
+            Object.keys(state.members).forEach(mId => {
+              if (!selectedMembers.includes(mId)) {
+                dayObj.memberLocations[mId] = dayObj.location;
+              }
+            });
+          }
+        }
+        selectedMembers.forEach(mId => {
+          if (joinedLocs) {
+            dayObj.memberLocations[mId] = joinedLocs;
+          } else {
+            delete dayObj.memberLocations[mId];
+          }
+        });
+        // Check if all members now have the SAME location, if so, compress back to global
+        let allSame = true;
+        let firstLoc = null;
+        const currentMemberLocs = Object.values(dayObj.memberLocations);
+        if (currentMemberLocs.length === totalMembers && currentMemberLocs.length > 0) {
+          firstLoc = currentMemberLocs[0];
+          allSame = currentMemberLocs.every(loc => loc === firstLoc);
+        } else {
+          allSame = false;
+        }
+        if (allSame) {
+          dayObj.location = firstLoc;
+          delete dayObj.memberLocations;
+        } else {
+          delete dayObj.location; // ensure no global override
+        }
       }
     }
   });
@@ -671,10 +767,31 @@ function clearDayLocation() {
     targetDays.push(editingLocationDay);
   }
 
+  const memberCheckboxes = document.querySelectorAll(".location-member-checkbox:checked");
+  const selectedMembers = Array.from(memberCheckboxes).map(cb => cb.value);
+  const totalMembers = Object.keys(state.members).length;
+  const isAllMembers = selectedMembers.length === totalMembers || selectedMembers.length === 0;
+
   targetDays.forEach(day => {
     const dayObj = state.days.find(d => d.day === day);
     if (dayObj) {
-      delete dayObj.location;
+      if (isAllMembers) {
+        delete dayObj.location;
+        delete dayObj.memberLocations;
+      } else {
+        if (!dayObj.memberLocations) {
+          dayObj.memberLocations = {};
+          if (dayObj.location) {
+            Object.keys(state.members).forEach(mId => {
+              if (!selectedMembers.includes(mId)) {
+                dayObj.memberLocations[mId] = dayObj.location;
+              }
+            });
+          }
+        }
+        selectedMembers.forEach(mId => delete dayObj.memberLocations[mId]);
+        delete dayObj.location;
+      }
     }
   });
 
@@ -738,7 +855,7 @@ function renderInfogramOverview(container) {
   let endDay = null;
 
   state.days.forEach((d, idx) => {
-    const loc = d.location || "未設定地點";
+    const loc = getDayLocationText(d) || "未設定地點";
     if (loc !== currentLoc) {
       if (currentLoc !== null) {
         routeNodes.push({
@@ -841,8 +958,9 @@ function renderInfogramOverview(container) {
     lane.className = "infogram-day-lane";
 
     const dayDateStr = d.date ? `${d.date.substring(5)} (${getDayOfWeek(d.date)})` : "";
-    const locBtnHtml = d.location 
-      ? `<button type="button" class="location-tag-btn has-location" onclick="openDayLocationModal(${d.day})" title="點擊修改所在地"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>${d.location}</button>`
+    const locText = getDayLocationText(d);
+    const locBtnHtml = locText 
+      ? `<button type="button" class="location-tag-btn has-location" onclick="openDayLocationModal(${d.day})" title="點擊修改所在地"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>${locText}</button>`
       : `<button type="button" class="location-tag-btn" onclick="openDayLocationModal(${d.day})" title="點擊設定所在地"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>+ 所在地</button>`;
 
     let laneHTML = `
@@ -987,8 +1105,9 @@ function renderListStreamOverview(container) {
     dayGroup.className = "stream-day-group";
     
     const dayDateStr = d.date ? `${d.date.substring(5)} (${getDayOfWeek(d.date)})` : "";
-    const locBtnHtml = d.location 
-      ? `<button type="button" class="location-tag-btn has-location" onclick="openDayLocationModal(${d.day})" title="點擊修改所在地"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>${d.location}</button>`
+    const locText = getDayLocationText(d);
+    const locBtnHtml = locText 
+      ? `<button type="button" class="location-tag-btn has-location" onclick="openDayLocationModal(${d.day})" title="點擊修改所在地"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>${locText}</button>`
       : `<button type="button" class="location-tag-btn" onclick="openDayLocationModal(${d.day})" title="點擊設定所在地"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>+ 所在地</button>`;
 
     let dayHtml = `
@@ -1173,17 +1292,7 @@ function renderItineraryTab() {
     if (outlineBadgeEl) outlineBadgeEl.innerText = `全程 ${state.days.length} 天`;
     
     // 全程足跡地點彙整（支援單日多個地點切分）
-    const allLocations = [];
-    state.days.forEach(d => {
-      if (d.location) {
-        const parts = d.location.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean);
-        parts.forEach(p => {
-          if (!allLocations.includes(p)) {
-            allLocations.push(p);
-          }
-        });
-      }
-    });
+    const allLocations = getAllTripLocations();
     const uniqueLocations = allLocations;
     if (locationBtn && locationText) {
       locationBtn.style.display = "inline-flex";

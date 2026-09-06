@@ -14,9 +14,8 @@
   <meta name="darkreader-lock">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="app-icon.jpg?v=2">
-  
-  <!-- 載入應用程式樣式與邏輯 (v51) -->
-  <link rel="stylesheet" href="app.css?v=51">
+  <!-- 載入應用程式樣式與邏輯 (v52) -->
+  <link rel="stylesheet" href="app.css?v=52">
 
 <script type="module">
   import * as nostrTools from "https://cdn.jsdelivr.net/npm/nostr-tools@1.1.1/+esm";
@@ -361,6 +360,13 @@
       
       <form id="form-day-location" onsubmit="saveDayLocation(event)">
         <div class="form-group">
+          <label class="form-label">套用成員（預設全體一起）</label>
+          <div class="checkbox-group" id="location-modal-member-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <!-- JS dynamically renders member checkboxes here -->
+          </div>
+        </div>
+
+        <div class="form-group">
           <label class="form-label">套用天數（可多選）</label>
           <div class="checkbox-group" id="location-modal-day-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px;">
           </div>
@@ -667,7 +673,7 @@
   </div>
 
   <!-- JS Logic Application -->
-  <script src="app.js?v=51"></script>
+  <script src="app.js?v=52"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
