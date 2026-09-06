@@ -527,6 +527,7 @@ let editingLocationDay = null;
 
 function openDayLocationModal(targetDay) {
   const initialDay = parseInt(targetDay) || (state.activeDay === 'all' ? 1 : parseInt(state.activeDay) || 1);
+  editingLocationDay = initialDay;
   const dayObj = state.days.find(d => d.day === initialDay);
   if (!dayObj) return;
 
@@ -599,8 +600,8 @@ function renderQuickLocationPills() {
 
 function syncQuickLocationPills() {
   const inputEl = document.getElementById("input-day-location");
-  const current = inputEl ? inputEl.value.split(/[、,，/\s]+/).map(s => s.trim()).filter(Boolean) : [];
-  const pills = document.querySelectorAll("#modal-day-location .checkbox-pill");
+  const current = inputEl ? inputEl.value.split(/[、,，/\\s]+/).map(s => s.trim()).filter(Boolean) : [];
+  const pills = document.querySelectorAll("#trip-used-locations .checkbox-pill, #quick-locations .checkbox-pill");
   pills.forEach(pill => {
     const city = pill.getAttribute("data-city") || pill.innerText.trim();
     if (current.includes(city)) {
