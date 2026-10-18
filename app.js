@@ -43,12 +43,37 @@ let state = {
   accommodations: [],
   attractions: [],
   expenses: [],
+  shareCode: "",
   chatPassphrase: "",
   chatMessages: [],
   overviewMode: "infogram"
 };
-    
 
+const SHARE_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+function generateShareCode() {
+  const bytes = new Uint8Array(6);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 6; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += SHARE_CODE_ALPHABET[bytes[i] % SHARE_CODE_ALPHABET.length];
+  }
+  return code;
+}
+
+function extractShareCode(raw) {
+  if (!raw) return "";
+  const str = String(raw).trim();
+  const urlMatch = str.match(/[?&]code=([A-Za-z0-9]{6})\b/);
+  if (urlMatch) return urlMatch[1].toUpperCase();
+  const tokenMatch = str.match(/\b([A-Za-z0-9]{6})\b/);
+  if (tokenMatch && str.length > 6) return tokenMatch[1].toUpperCase();
+  return str.replace(/[^A-Za-z0-9]/g, "").toUpperCase().substring(0, 6);
+}
 
 // === 新增專案管理變數 ===
 let projects = [];
@@ -56,9 +81,12 @@ let currentProjectId = null;
 
 // 全域密鑰與 PWA 連線狀態
 let derivedCryptoKey = null;
+let currentRoomIdentity = null;
 let nostrWebSocket = null;
 let myTempNostrPrivateKey = null;
 let myTempNostrPublicKey = null;
+let lastPublishedCreatedAt = 0;
+let cloudSnapshotTimer = null;
 let currentActiveUserId = "m4"; // 預設「我」代表此台手機的操作者
 let myDeviceId = localStorage.getItem("family_travel_device_id");
 if (!myDeviceId) {
@@ -81,7 +109,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 3. 初始化隨機 Nostr 私密金鑰
   await initNostrKeys();
   
-  // 4. 計算並導出 AES 加密密鑰
+  // 4. 計算並導出 AES 加密密鑰與六碼房間身分
   await deriveChatKey();
   
   // 5. 連線至 Nostr 去中心化即時 Relay
@@ -92,6 +120,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   // 7. 設定滾動到最下方 (聊天室)
   scrollChatToBottom();
+
+  // 8. 檢查網址是否帶有 ?code=XXXXXX 邀請碼，若有則自動載入旅程
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlCode = urlParams.get("code");
+  if (urlCode) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+    const cleaned = extractShareCode(urlCode);
+    if (cleaned.length === 6) {
+      openModal("modal-sync");
+      const joinInput = document.getElementById("join-code-input");
+      if (joinInput) joinInput.value = cleaned;
+      await joinTripByCode(cleaned, { fromUrl: true });
+    }
+  }
 });
 
 /**
@@ -156,7 +198,9 @@ function loadFromLocalStorage() {
   }
 
   // 每次載入前先重置為預設狀態骨架
-  const randomPassphrase = "sec_" + Math.random().toString(36).substring(2, 10);
+  const initialCode = (currentProject?.shareCode && /^[A-Z0-9]{6}$/i.test(currentProject.shareCode))
+    ? currentProject.shareCode.toUpperCase()
+    : generateShareCode();
   state = {
     tripName: currentProject?.name || "新旅程",
     tripDates: currentProject ? `${currentProject.start.replace(/-/g, '.')} - ${currentProject.end.replace(/-/g, '.')}` : "未設定",
@@ -172,7 +216,8 @@ function loadFromLocalStorage() {
     accommodations: [],
     attractions: [],
     expenses: [],
-    chatPassphrase: randomPassphrase,
+    shareCode: initialCode,
+    chatPassphrase: initialCode,
     chatMessages: [],
     overviewMode: "infogram"
   };
@@ -186,17 +231,39 @@ function loadFromLocalStorage() {
     } catch (e) {
       console.error("解析本地儲存失敗:", e);
     }
-  } else {
-    saveToLocalStorage();
   }
+
+  // 確保每個專案都擁有標準 6 碼英數通行碼，並與加密密鑰同步
+  let validCode = "";
+  if (state.shareCode && /^[A-Z0-9]{6}$/i.test(state.shareCode)) {
+    validCode = state.shareCode.toUpperCase();
+  } else if (state.chatPassphrase && /^[A-Z0-9]{6}$/i.test(state.chatPassphrase)) {
+    validCode = state.chatPassphrase.toUpperCase();
+  } else if (currentProject?.shareCode && /^[A-Z0-9]{6}$/i.test(currentProject.shareCode)) {
+    validCode = currentProject.shareCode.toUpperCase();
+  } else {
+    validCode = generateShareCode();
+  }
+
+  state.shareCode = validCode;
+  state.chatPassphrase = validCode;
+  if (currentProject && currentProject.shareCode !== validCode) {
+    currentProject.shareCode = validCode;
+    saveProjectsToLocal();
+  }
+
+  saveToLocalStorage(true);
 }
 
 /**
  * 儲存本地儲存 (目前專案)
  */
-function saveToLocalStorage() {
+function saveToLocalStorage(skipCloudSync = false) {
   if (!currentProjectId) return;
   localStorage.setItem(`family_travel_agent_state_${currentProjectId}`, JSON.stringify(state));
+  if (!skipCloudSync && typeof scheduleCloudSnapshotSync === "function") {
+    scheduleCloudSnapshotSync();
+  }
 }
 
 // === 專案管理 UI 邏輯 ===
@@ -246,7 +313,7 @@ function updateTripNameAndDate() {
     proj.name = name;
     proj.start = start;
     proj.end = end;
-    saveProjectList();
+    saveProjectsToLocal();
   }
   
   saveToLocalStorage();
@@ -380,6 +447,17 @@ function renderAllViews() {
   // 更新 Header
   document.getElementById("header-trip-name").innerText = state.tripName || "無名稱";
   document.getElementById("trip-dates").innerText = state.tripDates || "無日期";
+  const headerCodeEl = document.getElementById("header-share-code");
+  if (headerCodeEl) {
+    headerCodeEl.innerText = state.shareCode ? `分享 · ${state.shareCode}` : "分享";
+  }
+  const passInputEl = document.getElementById("chat-passphrase-input");
+  if (passInputEl && state.shareCode) {
+    passInputEl.value = state.shareCode;
+  }
+  if (typeof renderShareCodeTiles === "function") {
+    renderShareCodeTiles();
+  }
   
   // 1. 渲染成員快速過濾列
   renderMemberFilterBar();
@@ -805,6 +883,7 @@ function saveDayLocation(e) {
           delete dayObj.location; // ensure no global override
         }
       }
+      dayObj.lastModified = Date.now();
     }
   });
 
@@ -848,6 +927,7 @@ function clearDayLocation() {
         selectedMembers.forEach(mId => delete dayObj.memberLocations[mId]);
         delete dayObj.location;
       }
+      dayObj.lastModified = Date.now();
     }
   });
 
@@ -1893,11 +1973,19 @@ function deleteLodging(id) {
 }
 
 // ==========================================================================
-// 7. 端對端加密聊天模組 (E2EE CHAT & NOSTR REAL-TIME SYNC)
+// 7. 端對端加密聊天與六碼雲端同步模組 (E2EE CHAT & 6-CODE NOSTR SYNC)
 // ==========================================================================
 
+async function sha256Hex(inputStr) {
+  const bytes = new TextEncoder().encode(inputStr);
+  const hashBuffer = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /**
- * 1. 隨機生成 Nostr 金鑰對（本地通訊用）
+ * 1. 載入 nostr-tools 並準備備用金鑰
  */
 async function initNostrKeys() {
   let nostrLib;
@@ -1936,42 +2024,74 @@ async function initNostrKeys() {
   } catch (err) {
     console.error("公鑰導出失敗，重置私鑰:", err);
     localStorage.removeItem("temp_nostr_sec");
-    // 遞迴重試一次
     return await initNostrKeys();
   }
 }
 
 /**
- * 2. 基於 PBKDF2 與 SHA-256 自群組通訊密碼導出對稱加密金鑰 (AES-256-GCM)
+ * 由 6 碼通行碼衍生確定性的 Nostr 金鑰對與房間標籤 (NIP-78)
+ */
+async function deriveNostrIdentityFromCode(rawCode) {
+  const normalized = String(rawCode || state.shareCode || state.chatPassphrase || "DEFAULT").toUpperCase().trim();
+  const privKey = await sha256Hex("baotuan_nostr_sk_v1_" + normalized);
+  const tagHash = await sha256Hex("baotuan_room_tag_v1_" + normalized);
+  const roomTag = "baotuan_trip_" + tagHash.substring(0, 24);
+  let pubKey = myTempNostrPublicKey || privKey.substring(0, 32).padEnd(64, "0");
+  try {
+    if (window.nostrTools && typeof window.nostrTools.getPublicKey === "function") {
+      pubKey = window.nostrTools.getPublicKey(privKey);
+    }
+  } catch (e) {
+    console.warn("由六碼衍生 Nostr 公鑰失敗:", e);
+  }
+  return {
+    code: normalized,
+    privKey,
+    pubKey,
+    roomTag,
+    dTag: roomTag
+  };
+}
+
+/**
+ * 由指定通行碼衍生 AES-256-GCM 對稱加密金鑰
+ */
+async function deriveAesKeyFromCode(rawCode) {
+  const password = String(rawCode || state.shareCode || state.chatPassphrase || "DEFAULT").toUpperCase().trim();
+  const saltString = "family_travel_salt_2026";
+  const textEncoder = new TextEncoder();
+
+  const baseKey = await window.crypto.subtle.importKey(
+    "raw",
+    textEncoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  return await window.crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: textEncoder.encode(saltString),
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+/**
+ * 2. 基於六碼通行碼導出當前專案的對稱加密金鑰與 Nostr 房間身分
  */
 async function deriveChatKey() {
   try {
-    const password = state.chatPassphrase;
-    const saltString = "family_travel_salt_2026"; // 靜態 Salt 保證跨手機導出相同金鑰
-    const textEncoder = new TextEncoder();
-    
-    const baseKey = await window.crypto.subtle.importKey(
-      "raw",
-      textEncoder.encode(password),
-      "PBKDF2",
-      false,
-      ["deriveKey"]
-    );
-    
-    derivedCryptoKey = await window.crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: textEncoder.encode(saltString),
-        iterations: 100000,
-        hash: "SHA-256"
-      },
-      baseKey,
-      { name: "AES-GCM", length: 256 },
-      false, // 可導出設為 false 確保安全
-      ["encrypt", "decrypt"]
-    );
-    
-    console.log("端對端加密金鑰衍生完成，AES-GCM-256 頻道已就緒");
+    const code = (state.shareCode || state.chatPassphrase || "").toUpperCase().trim();
+    derivedCryptoKey = await deriveAesKeyFromCode(code);
+    currentRoomIdentity = await deriveNostrIdentityFromCode(code);
+    console.log(`端對端加密金鑰衍生完成，六碼頻道 [${code}] 已就緒`);
   } catch (error) {
     console.error("衍生加密金鑰失敗，群組對話將退化為本地明文傳輸:", error);
   }
@@ -1980,22 +2100,27 @@ async function deriveChatKey() {
 /**
  * 3. 網頁 AES-GCM 端對端加密函數
  */
-async function encryptText(plainText) {
-  if (!derivedCryptoKey) return { isEncrypted: false, data: plainText };
+function uint8ArrayToBase64(bytes) {
+  let binary = "";
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+async function encryptWithKey(plainText, cryptoKey) {
+  if (!cryptoKey) return { isEncrypted: false, data: plainText };
   try {
     const textEncoder = new TextEncoder();
-    const iv = window.crypto.getRandomValues(new Uint8Array(12)); // 隨機 12 bytes 初始向量
-    
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const ciphertextBuffer = await window.crypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv },
-      derivedCryptoKey,
+      cryptoKey,
       textEncoder.encode(plainText)
     );
-    
-    // 將 iv 與密文轉為 Base64 字串傳遞
-    const ivBase64 = btoa(String.fromCharCode(...iv));
-    const ciphertextBase64 = btoa(String.fromCharCode(...new Uint8Array(ciphertextBuffer)));
-    
+    const ivBase64 = uint8ArrayToBase64(iv);
+    const ciphertextBase64 = uint8ArrayToBase64(new Uint8Array(ciphertextBuffer));
     return {
       isEncrypted: true,
       payload: `${ivBase64}:${ciphertextBase64}`
@@ -2006,51 +2131,54 @@ async function encryptText(plainText) {
   }
 }
 
+async function encryptText(plainText) {
+  return encryptWithKey(plainText, derivedCryptoKey);
+}
+
 /**
  * 4. 網頁 AES-GCM 端對端解密函數
  */
-async function decryptText(payload) {
-  if (!derivedCryptoKey) return payload;
+async function decryptWithKey(payload, cryptoKey) {
+  if (!cryptoKey) return payload;
   try {
-    const parts = payload.split(":");
-    if (parts.length !== 2) return payload; // 明文格式
-    
+    const parts = String(payload).split(":");
+    if (parts.length !== 2) return payload;
     const ivBytes = new Uint8Array(
       atob(parts[0]).split("").map(c => c.charCodeAt(0))
     );
     const cipherBytes = new Uint8Array(
       atob(parts[1]).split("").map(c => c.charCodeAt(0))
     );
-    
     const decryptedBuffer = await window.crypto.subtle.decrypt(
       { name: "AES-GCM", iv: ivBytes },
-      derivedCryptoKey,
+      cryptoKey,
       cipherBytes
     );
-    
     return new TextDecoder().decode(decryptedBuffer);
   } catch (e) {
-    // 解密失敗通常是因為密鑰不同，或內容未被加密
-    console.warn("訊息解密失敗（可能頻道密鑰不同或非加密格式）:", e);
     return "[無法解密：通訊密鑰不符]";
   }
 }
 
+async function decryptText(payload) {
+  return decryptWithKey(payload, derivedCryptoKey);
+}
+
 /**
  * 5. 去中心化 Nostr WebSockets 連線
- * 使用公開的免費中繼伺服器 wss://nos.lol
  */
 let nostrWebSockets = [];
-const relays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
+const relays = ["wss://nos.lol", "wss://relay.damus.io", "wss://relay.primal.net"];
 
 function connectToNostrRelay() {
   nostrWebSockets.forEach(ws => { try { ws.close(); } catch(e){} });
   nostrWebSockets = [];
-  
-  const channelTag = state.tripName + "_" + state.chatPassphrase;
+
+  const pubKey = currentRoomIdentity?.pubKey || myTempNostrPublicKey;
+  const roomTag = currentRoomIdentity?.roomTag || ("baotuan_" + (state.shareCode || state.chatPassphrase));
   const subscription = [
     "REQ", "family_chat_sub",
-    { kinds: [22447], "#t": [channelTag], limit: 50 }
+    { authors: [pubKey], kinds: [1, 30078, 22447], "#t": [roomTag], limit: 50 }
   ];
 
   relays.forEach(relayUrl => {
@@ -2067,6 +2195,8 @@ function connectSingleRelay(relayUrl, subscription) {
     ws.onopen = () => {
       console.log(`Nostr 中繼伺服器 (${relayUrl}) 連線成功！開始訂閱加密對話頻道...`);
       ws.send(JSON.stringify(subscription));
+      // 首次連上中繼站時，自動在背景確保雲端有一份最新快照
+      scheduleCloudSnapshotSync(1800);
     };
     
     ws.onmessage = async (event) => {
@@ -2081,22 +2211,25 @@ function connectSingleRelay(relayUrl, subscription) {
           const encryptedPayload = nostrEvent.content;
           
           const decryptedText = await decryptText(encryptedPayload);
+          if (!decryptedText || decryptedText.startsWith("[無法解密")) return;
           const msgObj = JSON.parse(decryptedText);
           
           if (msgObj.type === "STATE_SYNC") {
             if (msgObj.deviceId !== myDeviceId && msgObj.timestamp > (state.lastSyncTimestamp || 0)) {
-              const senderName = state.members[msgObj.sender]?.name || "家人";
-              if (confirm(`收到來自「${senderName}」的最新行程與記帳更新，是否立刻合併？\n(您自己新增的項目會保留，不會被覆蓋)`)) {
-                mergeIncomingState(msgObj.payload, msgObj.timestamp);
-                alert("已成功合併最新行程資料！您與對方各自新增的項目都已保留。");
-              }
+              mergeIncomingState(msgObj.payload, msgObj.timestamp, true);
+              updateCloudStatusBanner("✅ 已即時合併家人推播的最新行程變更", "var(--accent-green)");
+            }
+          } else if (msgObj.type === "STATE_SNAPSHOT") {
+            if (msgObj.deviceId !== myDeviceId && msgObj.timestamp > (state.lastSyncTimestamp || 0)) {
+              mergeIncomingState(msgObj.payload, msgObj.timestamp, true);
+              console.log("[Nostr] 已自動從雲端快照合併最新狀態");
             }
           } else if (msgObj.type === "MEMBER_SYNC") {
             if (msgObj.deviceId !== myDeviceId) {
               const combinedDeleted = mergeDeletedItems(state.deletedItems, msgObj.deletedItems);
               state.deletedItems = combinedDeleted;
               state.members = mergeMembers(state.members, msgObj.members, combinedDeleted);
-              saveToLocalStorage();
+              saveToLocalStorage(true);
               renderAllViews();
               console.log("[Nostr] 已自動同步家庭成員名稱");
             }
@@ -2105,13 +2238,13 @@ function connectSingleRelay(relayUrl, subscription) {
               const claimedName = state.members[msgObj.claimedId]?.name || "未知";
               alert(`⚠️ 身份衝突警告！\n\n另一台裝置剛剛將自己設定為「${claimedName}」，和您目前的身份相同。\n\n這會導致聊天訊息與記帳分攤混亂。請其中一方立刻到「成員設定」頁面切換成自己的身份。`);
             }
-          } else {
+          } else if (msgObj.id && msgObj.content) {
             if (!state.chatMessages.some(m => m.id === msgObj.id)) {
               state.chatMessages.push(msgObj);
               if (state.chatMessages.length > 100) {
                 state.chatMessages = state.chatMessages.slice(-100);
               }
-              saveToLocalStorage();
+              saveToLocalStorage(true);
               if (state.currentTab === "chat") {
                 renderChatMessages();
                 scrollChatToBottom();
@@ -2138,9 +2271,9 @@ function connectSingleRelay(relayUrl, subscription) {
 }
 
 /**
- * 6. 向 Nostr 網路發送 AES 端對端加密訊息
+ * 6. 向 Nostr 網路發送 AES 端對端加密訊息（支援 NIP-78 可替換快照 kind: 30078）
  */
-async function publishEncryptedMessageToNostr(messageObject) {
+async function publishEncryptedMessageToNostr(messageObject, options = {}) {
   const openSockets = nostrWebSockets.filter(ws => ws.readyState === 1);
   if (openSockets.length === 0) {
     console.warn("所有 WebSocket 皆未就緒，無法發送");
@@ -2148,48 +2281,56 @@ async function publishEncryptedMessageToNostr(messageObject) {
   }
   
   try {
+    const isSnapshot = Boolean(
+      options.isSnapshot ||
+      messageObject.type === "STATE_SNAPSHOT" ||
+      messageObject.type === "STATE_SYNC"
+    );
+
     const textString = JSON.stringify(messageObject);
-    // 檢查訊息大小 (Nostr 中繼站上限約 64KB)
     const rawSize = new Blob([textString]).size;
-    console.log(`[Nostr] 訊息原始大小: ${(rawSize / 1024).toFixed(1)} KB`);
-    if (rawSize > 48000) {
-      console.warn("[Nostr] 訊息過大，嘗試精簡...");
-      if (messageObject.type === "STATE_SYNC" && messageObject.payload) {
-        delete messageObject.payload.chatMessages;
-        delete messageObject.payload.lastSyncTimestamp;
-      }
+    if (rawSize > 48000 && messageObject.payload) {
+      delete messageObject.payload.chatMessages;
+      delete messageObject.payload.lastSyncTimestamp;
     }
     
     const finalText = JSON.stringify(messageObject);
     const encryptedResult = await encryptText(finalText);
     if (!encryptedResult.isEncrypted) return false;
     
-    const channelTag = state.tripName + "_" + state.chatPassphrase;
-    const timestampSec = Math.floor(Date.now() / 1000);
+    if (!currentRoomIdentity) {
+      currentRoomIdentity = await deriveNostrIdentityFromCode(state.shareCode || state.chatPassphrase);
+    }
+
+    const roomTag = currentRoomIdentity.roomTag;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const timestampSec = isSnapshot ? Math.max(nowSec, lastPublishedCreatedAt + 1) : nowSec;
+    if (isSnapshot) lastPublishedCreatedAt = timestampSec;
+
     const eventContent = encryptedResult.payload;
-    const eventPubkey = myTempNostrPublicKey.padEnd(64, '0');
+    const eventPubkey = currentRoomIdentity.pubKey;
+    const eventPrivkey = currentRoomIdentity.privKey;
+    const eventKind = isSnapshot ? 30078 : (options.kind || (messageObject.id ? 1 : 22447));
+    const eventTags = isSnapshot ? [["d", currentRoomIdentity.dTag], ["t", roomTag]] : [["t", roomTag]];
     
-    // 組裝事件 (符合 NIP-01)
     let event = {
       pubkey: eventPubkey,
       created_at: timestampSec,
-      kind: 22447,
-      tags: [["t", channelTag]],
+      kind: eventKind,
+      tags: eventTags,
       content: eventContent
     };
     
     if (window.nostrTools && typeof window.nostrTools.getEventHash === "function") {
       event.id = window.nostrTools.getEventHash(event);
     } else {
-      const serialized = JSON.stringify([0, eventPubkey, timestampSec, 22447, [["t", channelTag]], eventContent]);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialized));
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      event.id = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const serialized = JSON.stringify([0, eventPubkey, timestampSec, eventKind, eventTags, eventContent]);
+      event.id = await sha256Hex(serialized);
     }
     
     try {
       if (window.nostrTools && typeof window.nostrTools.signEvent === "function") {
-        const sigResult = window.nostrTools.signEvent(event, myTempNostrPrivateKey);
+        const sigResult = window.nostrTools.signEvent(event, eventPrivkey);
         event.sig = typeof sigResult === 'string' ? sigResult : (sigResult.sig || sigResult);
       } else {
         console.warn("未偵測到 nostr-tools，無法簽名");
@@ -2202,22 +2343,16 @@ async function publishEncryptedMessageToNostr(messageObject) {
     
     const envelope = ["EVENT", event];
     const envelopeStr = JSON.stringify(envelope);
-    console.log(`[Nostr] 發送封包大小: ${(new Blob([envelopeStr]).size / 1024).toFixed(1)} KB`);
     
     let sentCount = 0;
     nostrWebSockets.forEach(ws => {
-      if (ws.readyState === 1) { // WebSocket.OPEN
+      if (ws.readyState === 1) {
         ws.send(envelopeStr);
         sentCount++;
       }
     });
     
-    if (sentCount === 0) {
-      console.warn("目前沒有可用的 Nostr 中繼站連線");
-      return false;
-    }
-    
-    return true;
+    return sentCount > 0;
   } catch (e) {
     console.error("發布訊息至 Nostr 失敗:", e);
     return false;
@@ -2234,7 +2369,7 @@ function renderChatMessages() {
   if (state.chatMessages.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px;">
-        本頻道端對端已加密。在此輸入第一句話與家人開始聊聊吧！
+        本頻道端對端已加密（六碼：${state.shareCode || ""}）。在此輸入第一句話與家人開始聊聊吧！
       </div>
     `;
     return;
@@ -2286,7 +2421,7 @@ async function sendTextMessage() {
   
   // 1. 先新增至本地顯示以防延遲 (模擬即時性)
   state.chatMessages.push(msgObj);
-  saveToLocalStorage();
+  saveToLocalStorage(true);
   renderChatMessages();
   scrollChatToBottom();
   
@@ -2294,15 +2429,14 @@ async function sendTextMessage() {
   input.value = "";
   
   // 3. 異步加密並發送給 Nostr 中繼網
-  const sent = await publishEncryptedMessageToNostr(msgObj);
+  const sent = await publishEncryptedMessageToNostr(msgObj, { kind: 1 });
   if (!sent) {
-    // 斷線時本地模擬：隨機一條家人自動回覆 (讓使用者能體驗即時聊天的樂趣！)
     setTimeout(simulateFamilyReply, 1500);
   }
 }
 
 /**
- * 模擬家人自動回覆 (無網路或測試情境用，WOW 使用者)
+ * 模擬家人自動回覆 (無網路或測試情境用)
  */
 function simulateFamilyReply() {
   const replies = [
@@ -2323,7 +2457,7 @@ function simulateFamilyReply() {
   };
   
   state.chatMessages.push(simulateMsg);
-  saveToLocalStorage();
+  saveToLocalStorage(true);
   renderChatMessages();
   scrollChatToBottom();
 }
@@ -2348,28 +2482,33 @@ function scrollChatToBottom() {
 }
 
 /**
- * 更新加密通訊密鑰並重新建立管道
+ * 更新旅程專屬六碼並重新建立加密管道與雲端快照
  */
 async function updateChatPassphrase() {
-  const newPass = document.getElementById("chat-passphrase-input").value.trim();
-  if (!newPass) {
-    alert("請輸入有效的密鑰！");
+  const rawPass = document.getElementById("chat-passphrase-input").value;
+  const newCode = extractShareCode(rawPass);
+  if (newCode.length !== 6) {
+    alert("請輸入 6 碼英數代碼（例如：8K9M2X）！");
     return;
   }
   
-  state.chatPassphrase = newPass;
-  saveToLocalStorage();
+  state.shareCode = newCode;
+  state.chatPassphrase = newCode;
+  const proj = projects.find(p => p.id === currentProjectId);
+  if (proj) {
+    proj.shareCode = newCode;
+    saveProjectsToLocal();
+  }
+  saveToLocalStorage(true);
   
-  // 重新衍生金鑰
+  // 重新衍生金鑰与房間身分
   await deriveChatKey();
   
   // 重新連接與訂閱
-  if (nostrWebSocket) {
-    nostrWebSocket.close();
-  }
   connectToNostrRelay();
+  renderAllViews();
   
-  alert(`通訊頻道已成功變更！現已使用密碼【${newPass}】進行 E2EE 安全加密。`);
+  alert(`旅程專屬六碼已變更為【${newCode}】！請將新六碼分享給家人以保持同步。`);
 }
 
 // ==========================================================================
@@ -2885,9 +3024,14 @@ function openModal(modalId) {
   if (modal) {
     modal.classList.add("active");
     
-    // 如果是資料同步 Modal，動態更新 JSON 代碼
+    // 如果是資料同步 Modal，動態更新六碼字卡、JSON 備份並自動同步雲端快照
     if (modalId === "modal-sync") {
-      document.getElementById("sync-data-textarea").value = JSON.stringify(state, null, 2);
+      renderShareCodeTiles();
+      const syncTextarea = document.getElementById("sync-data-textarea");
+      if (syncTextarea) syncTextarea.value = JSON.stringify(state, null, 2);
+      const joinStatus = document.getElementById("join-code-status");
+      if (joinStatus) joinStatus.innerText = "";
+      publishTripSnapshotToCloud(false);
     }
   }
 }
@@ -2979,18 +3123,337 @@ function toggleCheckboxPillStyle(input) {
 }
 
 // ==========================================================================
-// 11. 資料備份、分享、匯出與匯入 (DATA BACKUP & SYNC ENGINE)
+// 11. 六碼極簡分享、雲端快照與離線備份引擎 (6-DIGIT SHARE & SYNC ENGINE)
 // ==========================================================================
 
+function renderShareCodeTiles() {
+  const container = document.getElementById("share-code-display");
+  if (!container) return;
+  const code = (state.shareCode || "------").toUpperCase().padEnd(6, "-").substring(0, 6);
+  container.innerHTML = code
+    .split("")
+    .map(ch => `<div class="share-code-tile">${ch}</div>`)
+    .join("");
+}
+
+function updateCloudStatusBanner(message, color = "var(--text-secondary)") {
+  const statusEl = document.getElementById("share-cloud-status");
+  if (statusEl) {
+    statusEl.innerText = message;
+    statusEl.style.color = color;
+  }
+}
+
+function scheduleCloudSnapshotSync(delayMs = 1500) {
+  if (cloudSnapshotTimer) clearTimeout(cloudSnapshotTimer);
+  cloudSnapshotTimer = setTimeout(() => {
+    publishTripSnapshotToCloud(true);
+  }, delayMs);
+}
+
 /**
- * 複製旅行代碼
+ * 將目前旅程加密後發布為 Nostr NIP-78 可替換快照 (kind: 30078)，讓家人隨時能以六碼下載
+ */
+async function publishTripSnapshotToCloud(silent = true) {
+  const openSockets = nostrWebSockets.filter(ws => ws.readyState === 1);
+  if (openSockets.length === 0) {
+    if (!silent) {
+      updateCloudStatusBanner("🔄 正在連線至加密雲端中繼站...", "var(--text-secondary)");
+      setTimeout(() => publishTripSnapshotToCloud(false), 1500);
+    }
+    return false;
+  }
+
+  if (!silent) {
+    updateCloudStatusBanner("🔄 正在同步最新行程至加密雲端...", "var(--text-secondary)");
+  }
+
+  try {
+    const snapshotState = {
+      ...state,
+      shareCode: state.shareCode,
+      chatPassphrase: state.shareCode,
+      chatMessages: (state.chatMessages || []).slice(-25)
+    };
+
+    const msgObj = {
+      type: "STATE_SNAPSHOT",
+      sender: currentActiveUserId,
+      deviceId: myDeviceId,
+      timestamp: Date.now(),
+      payload: snapshotState
+    };
+
+    const ok = await publishEncryptedMessageToNostr(msgObj, { isSnapshot: true });
+    if (ok) {
+      if (!silent) {
+        updateCloudStatusBanner(`✅ 雲端加密快照已同步！家人輸入「${state.shareCode}」即可加入`, "var(--accent-green)");
+      }
+      return true;
+    } else {
+      if (!silent) {
+        updateCloudStatusBanner("⚠️ 雲端同步未完成，請確認網路連線或使用下方離線備份", "var(--accent-red)");
+      }
+      return false;
+    }
+  } catch (e) {
+    console.error("發布雲端快照失敗:", e);
+    if (!silent) {
+      updateCloudStatusBanner("⚠️ 雲端同步失敗：" + e.message, "var(--accent-red)");
+    }
+    return false;
+  }
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {}
+  }
+  const temp = document.createElement("textarea");
+  temp.value = text;
+  temp.style.position = "fixed";
+  temp.style.opacity = "0";
+  document.body.appendChild(temp);
+  temp.focus();
+  temp.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch (e) {}
+  document.body.removeChild(temp);
+  return copied;
+}
+
+async function copyShareCodeOnly() {
+  await publishTripSnapshotToCloud(false);
+  const ok = await copyTextToClipboard(state.shareCode);
+  if (ok) {
+    updateCloudStatusBanner(`✅ 已複製六碼「${state.shareCode}」！直接傳給家人即可輸入加入`, "var(--accent-green)");
+  }
+}
+
+/**
+ * 一鍵分享（同步雲端快照 ＋ 複製邀請文字與連結／呼叫手機原生分享）
+ */
+async function shareTripByCode() {
+  await publishTripSnapshotToCloud(false);
+  const shareUrl = `${window.location.origin}${window.location.pathname}?code=${state.shareCode}`;
+  const shareText = `🎒 邀請你加入「${state.tripName}」旅程！\n打開「抱團」輸入六碼：${state.shareCode}\n或點擊連結直接加入：\n${shareUrl}`;
+
+  await copyTextToClipboard(shareText);
+  updateCloudStatusBanner(`✅ 已複製邀請訊息與六碼「${state.shareCode}」！可直接在 LINE 貼上傳給家人`, "var(--accent-green)");
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: `抱團 - ${state.tripName}`,
+        text: `邀請你加入「${state.tripName}」！輸入六碼 ${state.shareCode} 或點擊連結直接加入：`,
+        url: shareUrl
+      });
+    } catch (err) {
+      // 使用者取消原生分享選單時不報錯，剪貼簿已備妥
+    }
+  }
+}
+
+function handleJoinCodeInput(inputEl) {
+  if (!inputEl) return;
+  const raw = inputEl.value;
+  if (raw.length > 6) {
+    inputEl.value = extractShareCode(raw);
+  } else {
+    inputEl.value = raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  }
+}
+
+function handleJoinCodePaste(e) {
+  const pasted = (e.clipboardData || window.clipboardData)?.getData("text");
+  if (pasted) {
+    const extracted = extractShareCode(pasted);
+    if (extracted.length === 6) {
+      e.preventDefault();
+      e.target.value = extracted;
+    }
+  }
+}
+
+async function handleJoinByCode(e) {
+  if (e) e.preventDefault();
+  const inputEl = document.getElementById("join-code-input");
+  const code = extractShareCode(inputEl ? inputEl.value : "");
+  await joinTripByCode(code);
+}
+
+/**
+ * 根據 6 碼通行碼從 Nostr 中繼站查詢並解密最新旅程快照
+ */
+async function fetchTripSnapshotFromRelays(code) {
+  const identity = await deriveNostrIdentityFromCode(code);
+  const aesKey = await deriveAesKeyFromCode(code);
+  const subId = "join_" + Math.random().toString(36).substring(2, 8);
+  const filter = {
+    authors: [identity.pubKey],
+    kinds: [30078, 22447],
+    "#t": [identity.roomTag],
+    limit: 5
+  };
+
+  let bestSnapshot = null;
+
+  await Promise.all(
+    relays.map(relayUrl => new Promise(resolve => {
+      let ws;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        try { if (ws) ws.close(); } catch (e) {}
+        resolve();
+      };
+      const timer = setTimeout(finish, 4200);
+
+      try {
+        ws = new WebSocket(relayUrl);
+        ws.onopen = () => {
+          ws.send(JSON.stringify(["REQ", subId, filter]));
+        };
+        ws.onmessage = async (ev) => {
+          try {
+            const data = JSON.parse(ev.data);
+            if (data[0] === "EVENT" && data[2] && data[2].content) {
+              const dec = await decryptWithKey(data[2].content, aesKey);
+              if (dec && !dec.startsWith("[無法解密")) {
+                const parsed = JSON.parse(dec);
+                const candidate = parsed.payload || (parsed.tripName ? parsed : null);
+                const ts = parsed.timestamp || (data[2].created_at * 1000) || 0;
+                if (candidate && candidate.tripName && candidate.itinerary) {
+                  if (!bestSnapshot || ts > bestSnapshot.timestamp) {
+                    bestSnapshot = { state: candidate, timestamp: ts };
+                  }
+                }
+              }
+            } else if (data[0] === "EOSE") {
+              clearTimeout(timer);
+              setTimeout(finish, 120);
+            }
+          } catch (err) {}
+        };
+        ws.onerror = () => {
+          clearTimeout(timer);
+          finish();
+        };
+      } catch (err) {
+        clearTimeout(timer);
+        finish();
+      }
+    }))
+  );
+
+  return bestSnapshot;
+}
+
+/**
+ * 輸入六碼（或點擊 ?code=XXXXXX 連結）加入或同步旅程
+ */
+async function joinTripByCode(rawCode, options = {}) {
+  const code = extractShareCode(rawCode);
+  const statusEl = document.getElementById("join-code-status");
+  const btnEl = document.getElementById("btn-join-code");
+
+  const setJoinStatus = (msg, color = "var(--text-secondary)") => {
+    if (statusEl) {
+      statusEl.innerText = msg;
+      statusEl.style.color = color;
+    }
+  };
+
+  if (code.length !== 6) {
+    setJoinStatus("⚠️ 請輸入完整的 6 碼英數通行碼", "var(--accent-red)");
+    return false;
+  }
+
+  if (btnEl) btnEl.disabled = true;
+  setJoinStatus(`🔍 正在從加密雲端載入代碼 [${code}] 的旅程...`, "var(--primary)");
+
+  try {
+    const result = await fetchTripSnapshotFromRelays(code);
+    if (!result || !result.state) {
+      setJoinStatus(`⚠️ 找不到代碼 [${code}] 的旅程資料。請確認代碼無誤，並請分享者點一下「一鍵分享」或「同步最新變更」。`, "var(--accent-red)");
+      if (btnEl) btnEl.disabled = false;
+      return false;
+    }
+
+    const importedState = result.state;
+    importedState.shareCode = code;
+    importedState.chatPassphrase = code;
+
+    // 檢查是否已經是當前開啟的專案
+    if (state.shareCode === code) {
+      mergeIncomingState(importedState, result.timestamp || Date.now());
+      setJoinStatus(`✅ 已與「${state.tripName}」雲端最新版本完成合併同步！`, "var(--accent-green)");
+      if (btnEl) btnEl.disabled = false;
+      setTimeout(() => closeModal("modal-sync"), 700);
+      return true;
+    }
+
+    // 檢查本地其他專案是否已有相同六碼
+    const existingProj = projects.find(p => (p.shareCode || "").toUpperCase() === code);
+    if (existingProj) {
+      await switchProject(existingProj.id);
+      mergeIncomingState(importedState, result.timestamp || Date.now());
+      setJoinStatus(`✅ 已切換至「${state.tripName}」並合併最新變更！`, "var(--accent-green)");
+      if (btnEl) btnEl.disabled = false;
+      setTimeout(() => closeModal("modal-sync"), 700);
+      return true;
+    }
+
+    // 建立全新本地專案並切換過去
+    const newId = "proj_" + Date.now();
+    let start = new Date().toISOString().split("T")[0];
+    let end = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+    if (importedState.tripDates && importedState.tripDates.includes(" - ")) {
+      const dates = importedState.tripDates.split(" - ");
+      start = dates[0].trim().replace(/\./g, "-");
+      end = dates[1].trim().replace(/\./g, "-");
+    }
+
+    projects.push({
+      id: newId,
+      name: importedState.tripName,
+      start,
+      end,
+      shareCode: code
+    });
+    saveProjectsToLocal();
+    localStorage.setItem(`family_travel_agent_state_${newId}`, JSON.stringify(importedState));
+
+    await switchProject(newId);
+    const inputEl = document.getElementById("join-code-input");
+    if (inputEl) inputEl.value = "";
+    setJoinStatus(`✅ 成功加入「${importedState.tripName}」！`, "var(--accent-green)");
+    if (btnEl) btnEl.disabled = false;
+    setTimeout(() => closeModal("modal-sync"), 600);
+    return true;
+  } catch (e) {
+    console.error("透過六碼加入旅程失敗:", e);
+    setJoinStatus("⚠️ 載入失敗：" + e.message, "var(--accent-red)");
+    if (btnEl) btnEl.disabled = false;
+    return false;
+  }
+}
+
+/**
+ * 複製旅行代碼 (JSON 離線備份)
  */
 function copyTripCode() {
   const textarea = document.getElementById("sync-data-textarea");
   textarea.select();
   try {
     document.execCommand("copy");
-    alert("旅行代碼已複製到剪貼簿！可直接透過 LINE 傳給家人貼上匯入。");
+    alert("離線 JSON 代碼已複製到剪貼簿！");
   } catch (err) {
     alert("複製失敗，請手動全選複製文字框內容。");
   }
@@ -3023,14 +3486,19 @@ function importTripCode() {
     alert("請先在輸入框內貼入家族旅行代碼！");
     return;
   }
+
+  // 如果使用者不小心把 6 碼通行碼貼進了 JSON 框，自動轉交給六碼加入引擎！
+  const maybeSixCode = extractShareCode(code);
+  if (maybeSixCode.length === 6 && !code.includes("{")) {
+    joinTripByCode(maybeSixCode);
+    return;
+  }
   
   try {
-    // 1. 解決 LINE 或 iOS 備忘錄會自動把半形雙引號 `"` 變成全形雙引號 `“` `”` 的問題
     let sanitizedCode = code
       .replace(/[\u201C\u201D]/g, '"')
       .replace(/[\u2018\u2019]/g, "'");
       
-    // 2. 智慧提取 JSON 區塊 (如果使用者不小心複製到前後文)
     const firstBrace = sanitizedCode.indexOf('{');
     const lastBrace = sanitizedCode.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -3039,16 +3507,13 @@ function importTripCode() {
       
     const importedState = JSON.parse(sanitizedCode);
     
-    // 基本結構檢核
     if (!importedState.tripName || !importedState.members || !importedState.itinerary) {
       alert("格式不正確！請確認此代碼為「抱團」匯出的旅行代碼。");
       return;
     }
     
     if (confirm(`確定要匯入「${importedState.tripName}」嗎？\n系統將為您建立一個全新的旅行專案來存放此資料，不會覆蓋您現在的旅行。`)) {
-      
       const newId = "proj_" + Date.now();
-      
       let start = new Date().toISOString().split('T')[0];
       let end = new Date(Date.now() + 86400000).toISOString().split('T')[0];
       
@@ -3057,19 +3522,22 @@ function importTripCode() {
          start = dates[0].trim().replace(/\./g, '-');
          end = dates[1].trim().replace(/\./g, '-');
       }
+
+      const shareCode = extractShareCode(importedState.shareCode || importedState.chatPassphrase);
+      const finalCode = shareCode.length === 6 ? shareCode : generateShareCode();
+      importedState.shareCode = finalCode;
+      importedState.chatPassphrase = finalCode;
       
       projects.push({
         id: newId,
         name: importedState.tripName,
         start: start,
-        end: end
+        end: end,
+        shareCode: finalCode
       });
       saveProjectsToLocal();
       
-      // 將資料存入新專案的 localStorage
       localStorage.setItem(`family_travel_agent_state_${newId}`, JSON.stringify(importedState));
-      
-      // 自動切換過去
       switchProject(newId);
       
       importTextarea.value = "";
@@ -3083,35 +3551,41 @@ function importTripCode() {
 }
 
 /**
- * 透過 Nostr 加密頻道向在線家人即時推播行程更新
+ * 透過 Nostr 加密頻道向在線家人即時推播行程更新，並同時更新雲端六碼快照
  */
 async function broadcastStateUpdate() {
   const openSockets = nostrWebSockets.filter(ws => ws.readyState === 1);
   if (openSockets.length === 0) {
-    alert("目前未連線至任何中繼伺服器 (可能正在重新連線中，或被防火牆阻擋)。系統會在背景持續重試，請稍後再試。");
+    updateCloudStatusBanner("⚠️ 目前未連線至中繼伺服器，系統正在背景重連中，請稍候再試", "var(--accent-red)");
     return;
   }
   
-  if (confirm("確定要將目前的「所有行程、住宿與記帳資料」推播給正在使用本 App 的家人嗎？\n(對方將會智慧合併，雙方各自新增的項目都會保留)")) {
-    try {
-      const coreState = { ...state };
-      delete coreState.chatMessages; // 聊天紀錄不用重複廣播
-      
-      const msgObj = {
-        type: "STATE_SYNC",
-        sender: currentActiveUserId,
-        deviceId: myDeviceId,
-        timestamp: Date.now(),
-        payload: coreState
-      };
-      
-      await publishEncryptedMessageToNostr(msgObj);
-      alert("行程更新已成功發送給在線家人！對方收到後會自動與他們的資料智慧合併。");
-      closeModal("modal-sync");
-    } catch (e) {
-      console.error(e);
-      alert("推播失敗：" + e.message);
+  try {
+    updateCloudStatusBanner("🔄 正在推播並更新雲端快照...", "var(--primary)");
+    const coreState = {
+      ...state,
+      shareCode: state.shareCode,
+      chatPassphrase: state.shareCode,
+      chatMessages: (state.chatMessages || []).slice(-25)
+    };
+    
+    const msgObj = {
+      type: "STATE_SYNC",
+      sender: currentActiveUserId,
+      deviceId: myDeviceId,
+      timestamp: Date.now(),
+      payload: coreState
+    };
+    
+    const ok = await publishEncryptedMessageToNostr(msgObj, { isSnapshot: true });
+    if (ok) {
+      updateCloudStatusBanner(`✅ 已同步至雲端並推播給家人！（六碼：${state.shareCode}）`, "var(--accent-green)");
+    } else {
+      updateCloudStatusBanner("⚠️ 推播未完成，請稍後再試", "var(--accent-red)");
     }
+  } catch (e) {
+    console.error(e);
+    updateCloudStatusBanner("⚠️ 推播失敗：" + e.message, "var(--accent-red)");
   }
 }
 
@@ -3128,33 +3602,27 @@ async function broadcastStateUpdate() {
 function mergeArrayById(localArr, remoteArr, combinedDeleted) {
   const map = new Map();
   
-  // 先放入本地的全部項目
   (localArr || []).forEach(item => {
     map.set(item.id, item);
   });
   
-  // 再放入遠端的項目
   (remoteArr || []).forEach(item => {
     const existing = map.get(item.id);
     if (!existing) {
-      // 本地沒有 → 這是對方新增的，加入
       map.set(item.id, item);
     } else {
-      // 雙方都有 → 比較 lastModified，取較新的
       const localTime = existing.lastModified || 0;
       const remoteTime = item.lastModified || 0;
-      if (remoteTime > localTime) {
+      if (remoteTime >= localTime) {
         map.set(item.id, item);
       }
     }
   });
   
-  // 移除被刪除的項目
   for (const deletedId of Object.keys(combinedDeleted)) {
     const deletedAt = combinedDeleted[deletedId];
     const item = map.get(deletedId);
     if (item) {
-      // 如果刪除時間比該項目的修改時間晚，代表使用者有意刪除
       const itemTime = item.lastModified || 0;
       if (deletedAt >= itemTime) {
         map.delete(deletedId);
@@ -3171,12 +3639,10 @@ function mergeArrayById(localArr, remoteArr, combinedDeleted) {
 function mergeMembers(localMembers, remoteMembers, combinedDeleted) {
   const map = new Map();
   
-  // 放入本地
   Object.keys(localMembers || {}).forEach(key => {
     map.set(key, localMembers[key]);
   });
   
-  // 合併遠端
   Object.keys(remoteMembers || {}).forEach(key => {
     const existing = map.get(key);
     if (!existing) {
@@ -3184,13 +3650,12 @@ function mergeMembers(localMembers, remoteMembers, combinedDeleted) {
     } else {
       const localTime = existing.lastModified || 0;
       const remoteTime = remoteMembers[key].lastModified || 0;
-      if (remoteTime > localTime) {
+      if (remoteTime >= localTime) {
         map.set(key, remoteMembers[key]);
       }
     }
   });
   
-  // 移除被刪除的成員
   for (const deletedId of Object.keys(combinedDeleted || {})) {
     const deletedAt = combinedDeleted[deletedId];
     const member = map.get(deletedId);
@@ -3221,9 +3686,31 @@ function mergeDeletedItems(localDeleted, remoteDeleted) {
 }
 
 /**
+ * 合併每日設定（含所在地 location / memberLocations、標題與描述）
+ */
+function mergeDays(localDays, remoteDays) {
+  if (!remoteDays || remoteDays.length === 0) return localDays || [];
+  if (!localDays || localDays.length === 0) return remoteDays;
+
+  const baseDays = remoteDays.length >= localDays.length ? remoteDays : localDays;
+  const localMap = new Map((localDays || []).map(d => [d.day, d]));
+  const remoteMap = new Map((remoteDays || []).map(d => [d.day, d]));
+
+  return baseDays.map(d => {
+    const lDay = localMap.get(d.day);
+    const rDay = remoteMap.get(d.day);
+    if (!lDay) return rDay;
+    if (!rDay) return lDay;
+    const lTime = lDay.lastModified || 0;
+    const rTime = rDay.lastModified || 0;
+    return rTime >= lTime ? { ...lDay, ...rDay } : { ...rDay, ...lDay };
+  });
+}
+
+/**
  * 主合併函式：接收遠端 state，與本地 state 進行智慧合併
  */
-function mergeIncomingState(remoteState, syncTimestamp) {
+function mergeIncomingState(remoteState, syncTimestamp, skipCloudSync = false) {
   // 1. 合併刪除記錄（雙方的墓碑都要保留）
   const combinedDeleted = mergeDeletedItems(state.deletedItems, remoteState.deletedItems);
   
@@ -3236,24 +3723,31 @@ function mergeIncomingState(remoteState, syncTimestamp) {
   // 3. 合併成員
   state.members = mergeMembers(state.members, remoteState.members, combinedDeleted);
   
-  // 4. 天數結構以「較多天數的一方」為準
-  if ((remoteState.days || []).length > (state.days || []).length) {
-    state.days = remoteState.days;
-  }
+  // 4. 合併每日設定與所在地
+  state.days = mergeDays(state.days, remoteState.days);
   
   // 5. 旅行基本資料以遠端為準（因為對方可能有修改名稱或日期）
   if (remoteState.tripName) state.tripName = remoteState.tripName;
   if (remoteState.tripDates) state.tripDates = remoteState.tripDates;
   
-  // 6. 合併聊天密鑰（使用對方的，保持頻道一致）
-  if (remoteState.chatPassphrase) state.chatPassphrase = remoteState.chatPassphrase;
+  // 6. 同步專案清單中的標題與六碼
+  if (remoteState.shareCode && /^[A-Z0-9]{6}$/i.test(remoteState.shareCode)) {
+    state.shareCode = remoteState.shareCode.toUpperCase();
+    state.chatPassphrase = state.shareCode;
+  }
+  const proj = projects.find(p => p.id === currentProjectId);
+  if (proj) {
+    if (state.tripName) proj.name = state.tripName;
+    if (state.shareCode) proj.shareCode = state.shareCode;
+    saveProjectsToLocal();
+  }
   
   // 7. 保存合併後的刪除記錄與時間戳
   state.deletedItems = combinedDeleted;
   state.lastSyncTimestamp = syncTimestamp;
   
   // 8. 保存並重新渲染
-  saveToLocalStorage();
+  saveToLocalStorage(skipCloudSync);
   renderAllViews();
 }
 
